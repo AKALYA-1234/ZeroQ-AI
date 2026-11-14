@@ -1,0 +1,13 @@
+file_name,column_name,description,relationship_or_usage
+products.csv,product_id,Unique product key,Primary key
+customers.csv,customer_id,Unique customer key,Primary key
+facilities.csv,facility_id,Unique manufacturing facility key,Primary key
+production_lines.csv,production_line_id,Unique production line key,Primary key; facility_id references facilities
+materials.csv,material_id,Unique raw or packaging material key,Primary key
+production_batches.csv,batch_id,Unique production batch key,"Primary key; product_id, facility_id, production_line_id and material IDs reference master tables"
+complaints.csv,complaint_id,Unique customer complaint key,"Primary key; customer_id, product_id and batch_id reference master tables"
+quality_inspections.csv,inspection_id,Unique inspection record key,Primary key; batch_id references production_batches
+investigations.csv,investigation_id,Unique investigation key,Primary key; complaint_id references complaints
+corrective_actions.csv,action_id,Unique corrective/preventive action key,Primary key; investigation_id and complaint_id reference investigation and complaint records
+production_batches.csv,complaint_occurred,"Synthetic batch-level target: 1 if a linked complaint exists, else 0",Target label; exclude complaint_count_linked and post-event fields from prediction features
+production_batches.csv,complaint_count_linked,Number of complaints linked to the batch,Outcome/analytics field; do not use as an input feature for pre-dispatch prediction

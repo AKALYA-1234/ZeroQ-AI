@@ -1,0 +1,2 @@
+Model,C,Positive_Class_Weight,Threshold,Test_Accuracy,Test_Precision,Test_Recall,Test_F1,Test_ROC_AUC,Test_PR_AUC,Majority_Baseline,True_Positive,True_Negative,False_Positive,False_Negative
+Optimized Logistic Regression,0.001,2.0,0.3649999999999998,0.7871744609353123,0.0,0.0,0.0,0.5257089837663258,0.22191928962083404,0.7896947633716046,0,2811,9,751

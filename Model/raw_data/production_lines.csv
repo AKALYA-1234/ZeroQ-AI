@@ -1,0 +1,16 @@
+production_line_id,facility_id,line_name,line_type,commissioned_year,operating_status
+LIN0101,FAC001,Line 1,Filling,2017,Active
+LIN0102,FAC001,Line 2,Filling,2003,Active
+LIN0103,FAC001,Line 3,Blending,2017,Active
+LIN0201,FAC002,Line 1,Filling,2016,Active
+LIN0202,FAC002,Line 2,Filling,2014,Active
+LIN0203,FAC002,Line 3,Packing,2015,Active
+LIN0301,FAC003,Line 1,Blending,2016,Active
+LIN0302,FAC003,Line 2,Filling,2013,Active
+LIN0303,FAC003,Line 3,Form-Fill-Seal,2009,Active
+LIN0401,FAC004,Line 1,Filling,2001,Active
+LIN0402,FAC004,Line 2,Blending,2016,Active
+LIN0403,FAC004,Line 3,Filling,2018,Active
+LIN0501,FAC005,Line 1,Form-Fill-Seal,2017,Active
+LIN0502,FAC005,Line 2,Blending,2006,Active
+LIN0503,FAC005,Line 3,Packing,2016,Active

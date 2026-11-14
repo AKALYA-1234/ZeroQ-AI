@@ -1,0 +1,41 @@
+﻿material_id,material_name,material_type,approved_supplier_id,criticality,shelf_life_days
+MAT0001,Packaging Film Grade 1,Packaging Film,SUP001,High,180
+MAT0002,Carton Grade 1,Carton,SUP002,Low,730
+MAT0003,Label Grade 1,Label,SUP003,High,730
+MAT0004,Raw Ingredient Grade 1,Raw Ingredient,SUP004,High,365
+MAT0005,Sealant Grade 1,Sealant,SUP005,High,180
+MAT0006,Bottle Grade 1,Bottle,SUP006,High,180
+MAT0007,Cap Grade 1,Cap,SUP007,Medium,540
+MAT0008,Packaging Film Grade 2,Packaging Film,SUP008,Medium,365
+MAT0009,Carton Grade 2,Carton,SUP009,Medium,365
+MAT0010,Label Grade 2,Label,SUP010,Medium,730
+MAT0011,Raw Ingredient Grade 2,Raw Ingredient,SUP011,Low,180
+MAT0012,Sealant Grade 2,Sealant,SUP012,Low,365
+MAT0013,Bottle Grade 2,Bottle,SUP001,Low,365
+MAT0014,Cap Grade 2,Cap,SUP002,Low,540
+MAT0015,Packaging Film Grade 3,Packaging Film,SUP003,Low,730
+MAT0016,Carton Grade 3,Carton,SUP004,Low,730
+MAT0017,Label Grade 3,Label,SUP005,Medium,365
+MAT0018,Raw Ingredient Grade 3,Raw Ingredient,SUP006,Medium,540
+MAT0019,Sealant Grade 3,Sealant,SUP007,Low,540
+MAT0020,Bottle Grade 3,Bottle,SUP008,Low,540
+MAT0021,Cap Grade 3,Cap,SUP009,Low,730
+MAT0022,Packaging Film Grade 4,Packaging Film,SUP010,High,365
+MAT0023,Carton Grade 4,Carton,SUP011,Medium,540
+MAT0024,Label Grade 4,Label,SUP012,High,540
+MAT0025,Raw Ingredient Grade 4,Raw Ingredient,SUP001,Medium,365
+MAT0026,Sealant Grade 4,Sealant,SUP002,Low,730
+MAT0027,Bottle Grade 4,Bottle,SUP003,Medium,730
+MAT0028,Cap Grade 4,Cap,SUP004,Medium,540
+MAT0029,Packaging Film Grade 5,Packaging Film,SUP005,Medium,180
+MAT0030,Carton Grade 5,Carton,SUP006,Low,730
+MAT0031,Label Grade 5,Label,SUP007,Medium,540
+MAT0032,Raw Ingredient Grade 5,Raw Ingredient,SUP008,High,540
+MAT0033,Sealant Grade 5,Sealant,SUP009,High,540
+MAT0034,Bottle Grade 5,Bottle,SUP010,Low,180
+MAT0035,Cap Grade 5,Cap,SUP011,Medium,730
+MAT0036,Packaging Film Grade 6,Packaging Film,SUP012,Low,540
+MAT0037,Carton Grade 6,Carton,SUP001,Low,730
+MAT0038,Label Grade 6,Label,SUP002,High,365
+MAT0039,Raw Ingredient Grade 6,Raw Ingredient,SUP003,Low,540
+MAT0040,Sealant Grade 6,Sealant,SUP004,Low,540

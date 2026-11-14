@@ -1,0 +1,21 @@
+product_id,product_name,product_category,storage_condition,shelf_life_days,standard_unit
+PRD001,Classic Biscuits,Biscuits,Ambient,270,case
+PRD002,Cream Biscuits,Biscuits,Ambient,270,case
+PRD003,Salted Snacks,Snacks,Ambient,180,case
+PRD004,Spicy Snack Mix,Snacks,Ambient,180,case
+PRD005,Potato Crisps,Snacks,Ambient,150,case
+PRD006,Instant Noodles,Convenience Foods,Ambient,365,case
+PRD007,Breakfast Cereal,Cereals,Ambient,270,case
+PRD008,Corn Flakes,Cereals,Ambient,270,case
+PRD009,Fruit Drink,Beverages,Ambient,180,case
+PRD010,Mango Beverage,Beverages,Ambient,180,case
+PRD011,Cooking Oil,Edible Oils,Ambient,365,case
+PRD012,Sunflower Oil,Edible Oils,Ambient,365,case
+PRD013,Wheat Flour,Staples,Ambient,180,case
+PRD014,Rice Flour,Staples,Ambient,180,case
+PRD015,Chocolate Wafer,Confectionery,Ambient,240,case
+PRD016,Chocolate Bar,Confectionery,Ambient,240,case
+PRD017,Tomato Ketchup,Condiments,Ambient,270,case
+PRD018,Mayonnaise,Condiments,Chilled,120,case
+PRD019,Instant Soup,Convenience Foods,Ambient,365,case
+PRD020,Peanut Butter,Spreads,Ambient,270,case

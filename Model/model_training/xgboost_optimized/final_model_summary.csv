@@ -1,0 +1,2 @@
+model,selected_class_weight,selected_threshold,test_accuracy,test_precision,test_recall,test_f1,test_roc_auc,test_pr_auc,majority_baseline_accuracy
+XGBoost Classifier,2.5,0.6100000000000001,0.7891346961635396,0.4166666666666667,0.006657789613848202,0.01310615989515072,0.5226747315635889,0.22914489930225942,0.7896947633716046
