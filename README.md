@@ -1,1 +1,0 @@
-# ZeroQ-AI
