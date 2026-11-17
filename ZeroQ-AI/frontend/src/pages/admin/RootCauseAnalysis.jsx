@@ -113,7 +113,7 @@ export default function RootCauseAnalysis() {
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex-1 min-w-[200px]">
             <label className="text-[10px] font-semibold text-gray-500 uppercase mb-1 block">Complaint ID</label>
-            <input type="text" placeholder="e.g., ZQ-CMP-2026-00125" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" value={selectedComplaint} onChange={e => setSelectedComplaint(e.target.value)} />
+            <input type="text" placeholder="e.g., CMP000001" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" value={selectedComplaint} onChange={e => setSelectedComplaint(e.target.value)} />
           </div>
           <button onClick={analyzeComplaint} disabled={!selectedComplaint || analysisLoading} className="px-5 py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700 disabled:opacity-50 flex items-center gap-1.5">
             <Brain size={14} /> {analysisLoading ? 'Analyzing...' : 'Analyze'}

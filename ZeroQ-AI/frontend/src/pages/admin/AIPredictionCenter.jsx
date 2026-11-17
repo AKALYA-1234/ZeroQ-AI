@@ -204,8 +204,8 @@ export default function AIPredictionCenter() {
               </div>
             </div>
             <div>
-              <label className="text-[10px] font-semibold text-gray-500 uppercase mb-1 block">Batch Number</label>
-              <input type="text" placeholder="e.g., LOT-2026-8882" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" value={inputForm.batch} onChange={e => setInputForm({...inputForm, batch: e.target.value})} />
+              <label className="text-[10px] font-semibold text-gray-500 uppercase mb-1 block">Batch ID</label>
+              <input type="text" placeholder="e.g., BAT000001" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" value={inputForm.batch} onChange={e => setInputForm({...inputForm, batch: e.target.value})} />
             </div>
             <div>
               <label className="text-[10px] font-semibold text-gray-500 uppercase mb-1 block">Complaint Description</label>
@@ -213,7 +213,7 @@ export default function AIPredictionCenter() {
             </div>
             <div>
               <label className="text-[10px] font-semibold text-gray-500 uppercase mb-1 block">Facility</label>
-              <input type="text" placeholder="e.g., Facility A" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" value={inputForm.facility} onChange={e => setInputForm({...inputForm, facility: e.target.value})} />
+              <input type="text" placeholder="e.g., Pune Manufacturing Unit" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" value={inputForm.facility} onChange={e => setInputForm({...inputForm, facility: e.target.value})} />
             </div>
             <div className="flex gap-2 pt-2">
               <button onClick={runPrediction} disabled={predicting || !isModelAvailable} className="flex-1 px-4 py-2.5 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700 disabled:opacity-50 flex items-center justify-center gap-1.5">

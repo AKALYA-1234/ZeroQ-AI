@@ -190,7 +190,7 @@ export default function CAPAManagement() {
                 </div>
                 <div>
                   <label className="text-[10px] font-semibold text-gray-500 uppercase mb-1 block">Related Complaint ID</label>
-                  <input type="text" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" value={createForm.complaint_id} onChange={e => setCreateForm({...createForm, complaint_id: e.target.value})} placeholder="e.g., ZQ-CMP-2026-00125" />
+                  <input type="text" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" value={createForm.complaint_id} onChange={e => setCreateForm({...createForm, complaint_id: e.target.value})} placeholder="e.g., CMP000001" />
                 </div>
               </div>
             </div>

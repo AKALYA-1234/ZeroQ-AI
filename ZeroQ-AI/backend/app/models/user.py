@@ -15,5 +15,17 @@ class User(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     customer_profile = relationship("CustomerProfile", back_populates="user", uselist=False)
-    complaints = relationship("Complaint", back_populates="submitter", foreign_keys="Complaint.submitted_by_user_id")
+    complaints = relationship("Complaint", back_populates="submitter")
     notifications = relationship("Notification", back_populates="user")
+
+
+class Customer(Base):
+    __tablename__ = "customers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    customer_id = Column(String(50), unique=True, index=True, nullable=False)
+    customer_type = Column(String(100), nullable=True)
+    region = Column(String(100), nullable=True, index=True)
+    customer_tenure_years = Column(Integer, nullable=True)
+    account_tier = Column(String(50), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

@@ -7,7 +7,16 @@ import {
 import api from '../../services/api'
 import { useAuth } from '../../context/AuthContext'
 
-const CATEGORIES = ['Packaging Issue', 'Material Quality Issue', 'Performance Issue', 'Product Defect', 'Safety Concern', 'Surface Defect']
+const CATEGORIES = [
+  'Packaging Defect',
+  'Sensory Defect',
+  'Physical Defect',
+  'Foreign Matter / Contamination',
+  'Weight / Quantity',
+  'Process-related Defect',
+  'Infestation',
+  'Other Customer Concern'
+]
 const SEVERITIES = [
   { value: 'low', label: 'Low', desc: 'Minor issue, no safety impact', color: 'bg-green-100 text-green-700 border-green-300' },
   { value: 'medium', label: 'Medium', desc: 'Moderate issue, limited impact', color: 'bg-amber-100 text-amber-700 border-amber-300' },
@@ -51,7 +60,7 @@ export default function SubmitComplaint() {
       files.forEach(f => fd.append('files', f))
 
       const res = await api.post('/api/complaints/', fd)
-      setComplaintId(res.data?.complaint_id || 'ZQ-CMP-NEW')
+      setComplaintId(res.data?.complaint_id || '')
       setSubmitted(true)
     } catch (err) {
       console.error(err)
@@ -70,7 +79,8 @@ export default function SubmitComplaint() {
           <p className="text-gray-500 mb-2">Your complaint has been registered with ID:</p>
           <p className="text-lg font-mono font-bold text-teal-600 mb-6">{complaintId}</p>
           <div className="flex gap-3 justify-center">
-            <button onClick={() => navigate('/customer/my-complaints')} className="px-5 py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700">View My Complaints</button>
+            <button onClick={() => navigate(`/customer/track-complaint/${complaintId}`)} className="px-5 py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700">Track Status</button>
+            <button onClick={() => navigate('/customer/my-complaints')} className="px-5 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50">View My Complaints</button>
             <button onClick={() => { setSubmitted(false); setForm({ ...form, title: '', description: '', category: '', reported_severity: '' }) }} className="px-5 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50">Submit Another</button>
           </div>
         </div>
@@ -97,8 +107,8 @@ export default function SubmitComplaint() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Batch Number (if known)</label>
-              <input type="text" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" value={form.batch_number} onChange={e => setForm({...form, batch_number: e.target.value})} placeholder="e.g., LOT-2026-8882" />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Batch ID (if known)</label>
+              <input type="text" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" value={form.batch_number} onChange={e => setForm({...form, batch_number: e.target.value})} placeholder="e.g., BAT000001" />
             </div>
           </div>
         </div>

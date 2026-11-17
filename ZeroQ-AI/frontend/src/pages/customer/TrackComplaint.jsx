@@ -4,7 +4,15 @@ import { Search, FileText, Clock, CheckCircle, AlertCircle, ArrowRight, Info } f
 import api from '../../services/api'
 
 const STATUS_STEPS = ['Submitted', 'Under Review', 'Investigating', 'Resolved']
-const STATUS_MAP = { submitted: 0, under_review: 1, investigating: 2, resolved: 3, rejected: 3 }
+const STATUS_MAP = {
+  submitted: 0,
+  under_review: 1,
+  investigating: 2,
+  investigation_in_progress: 2,
+  corrective_action_initiated: 2,
+  resolved: 3,
+  rejected: 3
+}
 
 export default function TrackComplaint() {
   const { complaintId: paramId } = useParams()
@@ -42,7 +50,7 @@ export default function TrackComplaint() {
         <div className="flex gap-3">
           <div className="flex-1 relative">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input type="text" placeholder="Enter Complaint ID (e.g., ZQ-CMP-2026-00125)" className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" value={searchId} onChange={e => setSearchId(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} />
+            <input type="text" placeholder="Enter Complaint ID (e.g., CMP000001)" className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" value={searchId} onChange={e => setSearchId(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} />
           </div>
           <button onClick={() => handleSearch()} disabled={loading || !searchId} className="px-5 py-2.5 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700 disabled:opacity-50">
             {loading ? 'Searching...' : 'Track'}

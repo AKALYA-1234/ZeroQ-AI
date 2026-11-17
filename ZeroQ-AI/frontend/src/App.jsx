@@ -13,6 +13,7 @@ import SubmitComplaint from './pages/customer/SubmitComplaint'
 import TrackComplaint from './pages/customer/TrackComplaint'
 import MyComplaints from './pages/customer/MyComplaints'
 import CustomerProfile from './pages/customer/CustomerProfile'
+import AIQueryPrediction from './pages/customer/AIQueryPrediction'
 
 // Admin pages
 import AdminLayout from './layouts/AdminLayout'
@@ -70,6 +71,7 @@ export default function App() {
         }>
           <Route index element={<Navigate to="home" replace />} />
           <Route path="home" element={<CustomerHome />} />
+          <Route path="query-prediction" element={<AIQueryPrediction />} />
           <Route path="submit-complaint" element={<SubmitComplaint />} />
           <Route path="track-complaint" element={<TrackComplaint />} />
           <Route path="track-complaint/:complaintId" element={<TrackComplaint />} />

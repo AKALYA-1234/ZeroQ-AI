@@ -11,19 +11,14 @@ logger = logging.getLogger(__name__)
 db_url = settings.DATABASE_URL
 engine = None
 
-# Robust SQLite path resolution
-candidates = [
-    r"d:\SSG_Fullstack_projects\Sakthi hackathon 2.0\zeroq_ai.db",
-    os.path.join(os.path.dirname(__file__), "..", "..", "zeroq_ai.db"),
-    os.path.abspath("./zeroq_ai.db"),
-]
-sqlite_file = next((p for p in candidates if os.path.exists(p)), os.path.abspath("./zeroq_ai.db"))
+# SQLite path relative to backend root
+sqlite_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "zeroq_ai.db"))
 sqlite_url = f"sqlite:///{sqlite_file.replace(os.sep, '/')}"
 
 if db_url.startswith("sqlite"):
     engine = create_engine(db_url, connect_args={"check_same_thread": False})
 else:
-    # Check if PostgreSQL port is actually open with a quick 0.3s socket check
+    # Check if PostgreSQL port is open
     parsed = urlparse(db_url)
     host = parsed.hostname or "localhost"
     port = parsed.port or 5432
@@ -31,7 +26,7 @@ else:
     is_open = False
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(0.3)
+        sock.settimeout(0.5)
         res = sock.connect_ex((host, port))
         if res == 0:
             is_open = True
@@ -47,10 +42,10 @@ else:
             engine = temp_engine
             logger.info("Connected to PostgreSQL database.")
         except Exception as e:
-            logger.warning(f"PostgreSQL credentials error: {e}. Using SQLite fallback.")
+            logger.warning(f"PostgreSQL connection error: {e}. Using SQLite fallback: {sqlite_url}")
             engine = create_engine(sqlite_url, connect_args={"check_same_thread": False})
     else:
-        logger.info(f"PostgreSQL service not detected on port 5432. Using SQLite: {sqlite_url}")
+        logger.info(f"PostgreSQL not detected on {host}:{port}. Using SQLite: {sqlite_url}")
         engine = create_engine(sqlite_url, connect_args={"check_same_thread": False})
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

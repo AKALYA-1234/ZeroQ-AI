@@ -30,6 +30,12 @@ export default function ComplaintManagement() {
   const [filterOptions, setFilterOptions] = useState({ products: [], categories: [], facilities: [] })
   const [kpis, setKpis] = useState({})
   const [queueSearch, setQueueSearch] = useState('')
+  const [updateStatus, setUpdateStatus] = useState('')
+  const [updateCustomerVisible, setUpdateCustomerVisible] = useState('')
+  const [updateAdminSeverity, setUpdateAdminSeverity] = useState('medium')
+  const [updateNotes, setUpdateNotes] = useState('')
+  const [updating, setUpdating] = useState(false)
+  const [updateSuccess, setUpdateSuccess] = useState('')
 
   useEffect(() => { fetchComplaints(); fetchFilters() }, [page, filters, showAllRecords])
 
@@ -72,14 +78,47 @@ export default function ComplaintManagement() {
 
   const selectComplaint = async (complaint) => {
     setSelectedComplaint(complaint)
+    setUpdateStatus(complaint.status || 'submitted')
+    setUpdateCustomerVisible(complaint.customer_visible_update || '')
+    setUpdateAdminSeverity(complaint.admin_severity || complaint.reported_severity || 'medium')
+    setUpdateNotes('')
+    setUpdateSuccess('')
     setDetailLoading(true)
     try {
       const res = await api.get(`/api/admin/complaints/${complaint.complaint_id}`)
       setComplaintDetail(res.data)
+      setUpdateStatus(res.data.status || 'submitted')
+      setUpdateCustomerVisible(res.data.customer_visible_update || '')
+      setUpdateAdminSeverity(res.data.admin_severity || res.data.reported_severity || 'medium')
     } catch (err) {
       console.error(err)
       setComplaintDetail(complaint)
     } finally { setDetailLoading(false) }
+  }
+
+  const handleUpdateComplaint = async () => {
+    if (!detail?.complaint_id) return
+    setUpdating(true)
+    setUpdateSuccess('')
+    try {
+      await api.put(`/api/admin/complaints/${detail.complaint_id}`, {
+        status: updateStatus || detail.status,
+        customer_visible_update: updateCustomerVisible,
+        notes: updateNotes || `Status updated to ${updateStatus?.replace(/_/g, ' ')}`,
+        admin_severity: updateAdminSeverity,
+        is_customer_visible: true
+      })
+      setUpdateSuccess('Status & triage updated successfully!')
+      const refreshed = await api.get(`/api/admin/complaints/${detail.complaint_id}`)
+      setComplaintDetail(refreshed.data)
+      fetchComplaints()
+      setTimeout(() => setUpdateSuccess(''), 4000)
+    } catch (err) {
+      console.error(err)
+      alert('Failed to update complaint')
+    } finally {
+      setUpdating(false)
+    }
   }
 
   const activeCount = complaints.filter(c => c.record_type === 'customer_submitted').length
@@ -150,7 +189,7 @@ export default function ComplaintManagement() {
       <div className="bg-teal-50 border border-teal-200 rounded-lg px-4 py-2.5 mb-4 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Layers size={14} className="text-teal-600" />
-          <span className="text-xs text-teal-800"><strong>Dual Data Topology Active:</strong> Currently distinguishing historical synthetic records from newly submitted customer intake cases.</span>
+          <span className="text-xs text-teal-800"><strong>Dual Data Topology Active:</strong> Currently distinguishing historical records from newly submitted customer intake cases.</span>
         </div>
         <div className="flex items-center gap-1">
           <button onClick={() => setShowAllRecords(true)} className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${showAllRecords ? 'bg-white text-teal-700 shadow-sm' : 'text-teal-600 hover:bg-teal-100'}`}>Show All</button>
@@ -237,7 +276,7 @@ export default function ComplaintManagement() {
                       {c.submitted_date ? new Date(c.submitted_date).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
                     </span>
                     {c.record_type === 'historical_synthetic' && (
-                      <Badge className="bg-slate-100 text-slate-500 border border-slate-200">Historical Synthetic</Badge>
+                      <Badge className="bg-slate-100 text-slate-500 border border-slate-200">Historical Record</Badge>
                     )}
                     {c.record_type === 'customer_submitted' && (
                       <Badge className="bg-emerald-50 text-emerald-600">Customer Submitted</Badge>
@@ -355,6 +394,89 @@ export default function ComplaintManagement() {
                           <div className="text-[10px] text-gray-500">Product</div>
                           <div className="text-xs font-semibold text-gray-800">{detail.product_name || 'N/A'}</div>
                         </div>
+                      </div>
+                    </div>
+
+                    {/* Active Status & Triage Controller */}
+                    <div className="bg-white border-2 border-teal-200 rounded-xl p-4 shadow-sm">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <Wrench size={15} className="text-teal-600" />
+                          <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">Quality Triage & Workflow Transition</h4>
+                        </div>
+                        {updateSuccess && (
+                          <span className="text-xs font-medium text-emerald-600 flex items-center gap-1 animate-pulse">
+                            <CheckCircle size={13} /> {updateSuccess}
+                          </span>
+                        )}
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                        <div>
+                          <label className="block text-[10px] font-semibold text-gray-500 uppercase mb-1">Workflow Stage</label>
+                          <select
+                            value={updateStatus}
+                            onChange={e => setUpdateStatus(e.target.value)}
+                            className="w-full text-xs border border-gray-300 rounded-lg px-2.5 py-2 bg-white font-medium text-gray-800 focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                          >
+                            <option value="submitted">1. Submitted (Pending Review)</option>
+                            <option value="under_review">2. Under Review (QA Triage)</option>
+                            <option value="investigation_in_progress">3. Investigating (Lab & Shop Floor)</option>
+                            <option value="corrective_action_initiated">4. CAPA Initiated</option>
+                            <option value="resolved">5. Resolved (Action Completed)</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-semibold text-gray-500 uppercase mb-1">Admin Assessed Severity</label>
+                          <select
+                            value={updateAdminSeverity}
+                            onChange={e => setUpdateAdminSeverity(e.target.value)}
+                            className="w-full text-xs border border-gray-300 rounded-lg px-2.5 py-2 bg-white font-medium text-gray-800 focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                          >
+                            <option value="low">Low Severity</option>
+                            <option value="medium">Medium Severity</option>
+                            <option value="high">High Severity</option>
+                            <option value="critical">Critical Severity</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="mb-3">
+                        <label className="block text-[10px] font-semibold text-gray-500 uppercase mb-1">
+                          Customer-Visible Status Update (Surfaced to Client Tracking Portal)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g., Retain samples inspected; QA team verifying sealing temperature logs."
+                          value={updateCustomerVisible}
+                          onChange={e => setUpdateCustomerVisible(e.target.value)}
+                          className="w-full text-xs border border-gray-300 rounded-lg px-3 py-2 text-gray-800 focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                        />
+                      </div>
+
+                      <div className="mb-3">
+                        <label className="block text-[10px] font-semibold text-gray-500 uppercase mb-1">
+                          Internal QA Triage Notes (Audit Trail Only)
+                        </label>
+                        <textarea
+                          rows={2}
+                          placeholder="Internal technical notes, lab sample numbers, or root cause hypothesis..."
+                          value={updateNotes}
+                          onChange={e => setUpdateNotes(e.target.value)}
+                          className="w-full text-xs border border-gray-300 rounded-lg px-3 py-2 text-gray-800 focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={handleUpdateComplaint}
+                          disabled={updating}
+                          className="px-4 py-2 bg-teal-600 text-white rounded-lg text-xs font-semibold hover:bg-teal-700 disabled:opacity-50 flex items-center gap-1.5 transition-colors shadow-sm"
+                        >
+                          {updating ? <RefreshCw size={13} className="animate-spin" /> : <CheckCircle size={13} />}
+                          {updating ? 'Saving Changes...' : 'Apply Status & Notify Customer'}
+                        </button>
                       </div>
                     </div>
 

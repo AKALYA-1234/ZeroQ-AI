@@ -5,7 +5,7 @@ import { complaintService } from '../../services/complaintService'
 import {
   FileText, Search, CheckCircle, Clock, AlertCircle,
   ArrowRight, Mail, Phone, Plus, Eye, Loader2,
-  Shield, Upload, BarChart3, ChevronRight, Zap
+  Shield, Upload, BarChart3, ChevronRight, Zap, Brain, Sparkles
 } from 'lucide-react'
 
 const StatusBadge = ({ status }) => {
@@ -114,66 +114,94 @@ export default function CustomerHome() {
           </div>
         </div>
 
-        {/* Submit & Track Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        {/* Actions Row: Submit, AI Predictor, and Track */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           {/* Submit Complaint Card */}
-          <div className="card p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between mb-4">
-              <div className="bg-teal-100 p-3 rounded-xl">
-                <FileText size={24} className="text-teal-600" />
+          <div className="card p-6 hover:shadow-md transition-shadow flex flex-col justify-between">
+            <div>
+              <div className="flex items-start justify-between mb-4">
+                <div className="bg-teal-100 p-3 rounded-xl">
+                  <FileText size={24} className="text-teal-600" />
+                </div>
+                <span className="text-xs font-semibold text-teal-600 bg-teal-50 px-2 py-1 rounded">SUBMISSION</span>
               </div>
-              <span className="text-xs font-semibold text-teal-600 bg-teal-50 px-2 py-1 rounded">PRIORITY ACTION</span>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Submit a Complaint</h3>
+              <p className="text-gray-600 text-sm mb-4">
+                Report a product defect, packaging issue, or quality discrepancy with inspection photos, batch details, and comments.
+              </p>
+              <div className="space-y-1.5 mb-4 text-xs text-gray-500">
+                <div className="flex items-center space-x-1"><CheckCircle size={12} className="text-teal-500" /><span>Upload photos & inspection evidence</span></div>
+                <div className="flex items-center space-x-1"><CheckCircle size={12} className="text-teal-500" /><span>Batch and lot verification</span></div>
+                <div className="flex items-center space-x-1"><CheckCircle size={12} className="text-teal-500" /><span>Direct ticket escalation</span></div>
+              </div>
             </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Submit a Complaint</h3>
-            <p className="text-gray-600 text-sm mb-4">
-              Report a product issue, defective item, damage, or quality discrepancy with inspection photos, batch details, and comments.
-            </p>
-            <div className="grid grid-cols-2 gap-2 mb-4 text-xs text-gray-500">
-              <div className="flex items-center space-x-1"><CheckCircle size={12} className="text-teal-500" /><span>Upload inspection photos & details</span></div>
-              <div className="flex items-center space-x-1"><CheckCircle size={12} className="text-teal-500" /><span>Batch barcode lookup</span></div>
-              <div className="flex items-center space-x-1"><CheckCircle size={12} className="text-teal-500" /><span>Instant ticket & reference ID</span></div>
-              <div className="flex items-center space-x-1"><CheckCircle size={12} className="text-teal-500" /><span>Dedicated support handling</span></div>
-            </div>
-            <Link to="/customer/submit-complaint" className="inline-flex items-center space-x-2 bg-teal-600 text-white px-6 py-2.5 rounded-lg font-semibold hover:bg-teal-700 transition-colors w-full justify-center">
+            <Link to="/customer/submit-complaint" className="inline-flex items-center space-x-2 bg-teal-600 text-white px-4 py-2.5 rounded-lg font-semibold hover:bg-teal-700 transition-colors w-full justify-center text-sm">
               <span>Submit Complaint</span><ArrowRight size={16} />
             </Link>
           </div>
 
-          {/* Track Complaint Card */}
-          <div className="card p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between mb-4">
-              <div className="bg-teal-100 p-3 rounded-xl">
-                <Search size={24} className="text-teal-600" />
+          {/* AI Risk Predictor Card */}
+          <div className="card p-6 hover:shadow-md transition-shadow border-teal-200 bg-gradient-to-b from-teal-50/40 to-white flex flex-col justify-between">
+            <div>
+              <div className="flex items-start justify-between mb-4">
+                <div className="bg-teal-600 p-3 rounded-xl text-white shadow-sm shadow-teal-700/20">
+                  <Brain size={24} />
+                </div>
+                <span className="text-xs font-bold text-teal-800 bg-teal-100 px-2.5 py-1 rounded-full border border-teal-200 flex items-center space-x-1">
+                  <Sparkles size={11} className="mr-0.5" />
+                  <span>AI ML MODEL</span>
+                </span>
               </div>
-              <span className="text-xs font-semibold text-teal-600 bg-teal-50 px-2 py-1 rounded">INSTANT STATUS</span>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">AI Risk Predictor</h3>
+              <p className="text-gray-600 text-sm mb-4">
+                Ask conversational questions to forecast 90-day complaint risk and evaluate batch telemetry using our trained XGBoost model.
+              </p>
+              <div className="space-y-1.5 mb-4 text-xs text-gray-500">
+                <div className="flex items-center space-x-1"><CheckCircle size={12} className="text-teal-500" /><span>Natural language parameter extraction</span></div>
+                <div className="flex items-center space-x-1"><CheckCircle size={12} className="text-teal-500" /><span>Trained XGBoost probability calculation</span></div>
+                <div className="flex items-center space-x-1"><CheckCircle size={12} className="text-teal-500" /><span>Contributing factor breakdown & history</span></div>
+              </div>
             </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Track Your Complaint</h3>
-            <p className="text-gray-600 text-sm mb-4">
-              Check inspection progress, QA reviewer notes, testing status, and resolution details using your Complaint Reference ID.
-            </p>
-            <div className="flex items-center space-x-2 mb-4">
-              <input
-                type="text"
-                value={trackId}
-                onChange={e => setTrackId(e.target.value)}
-                placeholder="ZQ-CMP-2026-00125"
-                className="flex-1 input-field text-sm"
-              />
-              <button
-                onClick={() => trackId && navigate(`/customer/track-complaint/${trackId}`)}
-                className="bg-teal-600 text-white px-4 py-2.5 rounded-lg font-medium hover:bg-teal-700 transition-colors flex items-center space-x-1"
-              >
-                <Search size={16} /><span>Track</span>
-              </button>
+            <Link to="/customer/query-prediction" className="inline-flex items-center space-x-2 bg-slate-900 text-white px-4 py-2.5 rounded-lg font-semibold hover:bg-slate-800 transition-colors w-full justify-center text-sm">
+              <span>Launch AI Predictor</span><ArrowRight size={16} />
+            </Link>
+          </div>
+
+          {/* Track Complaint Card */}
+          <div className="card p-6 hover:shadow-md transition-shadow flex flex-col justify-between">
+            <div>
+              <div className="flex items-start justify-between mb-4">
+                <div className="bg-teal-100 p-3 rounded-xl">
+                  <Search size={24} className="text-teal-600" />
+                </div>
+                <span className="text-xs font-semibold text-teal-600 bg-teal-50 px-2 py-1 rounded">INSTANT STATUS</span>
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Track Your Complaint</h3>
+              <p className="text-gray-600 text-sm mb-4">
+                Check QA notes, root-cause investigation milestones, and resolution progress using your Complaint Reference ID.
+              </p>
+              <div className="flex items-center space-x-2 mb-4">
+                <input
+                  type="text"
+                  value={trackId}
+                  onChange={e => setTrackId(e.target.value)}
+                  placeholder="e.g., CMP000001"
+                  className="flex-1 input-field text-sm"
+                />
+                <button
+                  onClick={() => trackId && navigate(`/customer/track-complaint/${trackId}`)}
+                  className="bg-teal-600 text-white px-3.5 py-2.5 rounded-lg font-medium hover:bg-teal-700 transition-colors flex items-center space-x-1 text-sm"
+                >
+                  <Search size={15} /><span>Track</span>
+                </button>
+              </div>
+              <div className="space-y-1.5 mb-4 text-xs text-gray-500">
+                <div className="flex items-center space-x-1"><CheckCircle size={12} className="text-teal-500" /><span>Live milestone tracking & closure notes</span></div>
+                <div className="flex items-center space-x-1"><CheckCircle size={12} className="text-teal-500" /><span>CAPA verification evidence</span></div>
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-2 mb-4 text-xs text-gray-500">
-              <div className="flex items-center space-x-1"><CheckCircle size={12} className="text-teal-500" /><span>Instant status updates</span></div>
-              <div className="flex items-center space-x-1"><CheckCircle size={12} className="text-teal-500" /><span>Inspection milestones</span></div>
-              <div className="flex items-center space-x-1"><CheckCircle size={12} className="text-teal-500" /><span>Resolution notifications</span></div>
-              <div className="flex items-center space-x-1"><CheckCircle size={12} className="text-teal-500" /><span>Download documentation</span></div>
-            </div>
-            <Link to="/customer/track-complaint" className="text-teal-600 hover:text-teal-700 text-sm font-medium flex items-center space-x-1">
-              <span>View Full Tracking Portal</span><ArrowRight size={14} />
+            <Link to="/customer/track-complaint" className="text-teal-600 hover:text-teal-700 text-sm font-medium flex items-center space-x-1 justify-center py-2">
+              <span>Open Tracking Portal</span><ArrowRight size={14} />
             </Link>
           </div>
         </div>

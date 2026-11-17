@@ -136,12 +136,23 @@ def get_dashboard(current_user=Depends(get_current_admin), db: Session = Depends
         Complaint.reported_severity.in_(["critical", "high"])
     ).scalar() or 0
 
-    avg_resolution_q = db.query(
-        func.avg(
-            func.extract("epoch", Complaint.resolved_date) - func.extract("epoch", Complaint.submitted_date)
-        )
-    ).filter(Complaint.resolved_date.isnot(None), Complaint.submitted_date.isnot(None)).scalar()
-    avg_resolution_days = round((avg_resolution_q or 0) / 86400, 1)
+    try:
+        if db.bind and db.bind.dialect.name == "sqlite":
+            avg_res = db.query(
+                func.avg(
+                    func.julianday(Complaint.resolved_date) - func.julianday(Complaint.submitted_date)
+                )
+            ).filter(Complaint.resolved_date.isnot(None), Complaint.submitted_date.isnot(None)).scalar()
+            avg_resolution_days = round(float(avg_res or 0), 1)
+        else:
+            avg_resolution_q = db.query(
+                func.avg(
+                    func.extract("epoch", Complaint.resolved_date) - func.extract("epoch", Complaint.submitted_date)
+                )
+            ).filter(Complaint.resolved_date.isnot(None), Complaint.submitted_date.isnot(None)).scalar()
+            avg_resolution_days = round((avg_resolution_q or 0) / 86400, 1)
+    except Exception:
+        avg_resolution_days = 0.0
 
     # Trend data — by year
     by_year = db.query(
@@ -239,8 +250,8 @@ def list_all_complaints(
     facility_id: Optional[int] = None,
     search: Optional[str] = None,
     source: Optional[str] = None,
-    sort_by: Optional[str] = Query("submitted_date", regex="^(submitted_date|last_updated|status|reported_severity|category)$"),
-    sort_order: Optional[str] = Query("desc", regex="^(asc|desc)$"),
+    sort_by: Optional[str] = Query("submitted_date", pattern="^(submitted_date|last_updated|status|reported_severity|category)$"),
+    sort_order: Optional[str] = Query("desc", pattern="^(asc|desc)$"),
     current_user=Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
@@ -1588,8 +1599,8 @@ def list_capa(
     assigned_to: Optional[str] = None,
     effectiveness_status: Optional[str] = None,
     search: Optional[str] = None,
-    sort_by: Optional[str] = Query("created_at", regex="^(created_at|deadline|status|priority)$"),
-    sort_order: Optional[str] = Query("desc", regex="^(asc|desc)$"),
+    sort_by: Optional[str] = Query("created_at", pattern="^(created_at|deadline|status|priority)$"),
+    sort_order: Optional[str] = Query("desc", pattern="^(asc|desc)$"),
     current_user=Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):

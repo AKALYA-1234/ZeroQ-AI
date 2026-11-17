@@ -19,12 +19,8 @@ ALLOWED_TYPES = {"image/jpeg", "image/png", "image/jpg", "application/pdf"}
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".pdf"}
 
 def generate_complaint_id(db: Session) -> str:
-    year = datetime.utcnow().year
-    count = db.query(func.count(Complaint.id)).filter(
-        func.extract('year', Complaint.submitted_date) == year,
-        Complaint.record_type == "customer_submitted"
-    ).scalar() or 0
-    return f"ZQ-{year}-{(count + 1):06d}"
+    count = db.query(func.count(Complaint.id)).scalar() or 0
+    return f"CMP{(count + 1):06d}"
 
 @router.post("/")
 @router.post("")
@@ -236,7 +232,7 @@ def get_complaint(complaint_id: str, current_user: User = Depends(get_current_cu
     complaint = db.query(Complaint).filter(Complaint.complaint_id == complaint_id).first()
     if not complaint:
         raise HTTPException(status_code=404, detail="Complaint not found")
-    if complaint.submitted_by_user_id != current_user.id:
+    if complaint.submitted_by_user_id and complaint.submitted_by_user_id != current_user.id and current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Access denied")
     
     return {
@@ -274,7 +270,7 @@ def get_complaint_timeline(complaint_id: str, current_user: User = Depends(get_c
     complaint = db.query(Complaint).filter(Complaint.complaint_id == complaint_id).first()
     if not complaint:
         raise HTTPException(status_code=404, detail="Complaint not found")
-    if complaint.submitted_by_user_id != current_user.id:
+    if complaint.submitted_by_user_id and complaint.submitted_by_user_id != current_user.id and current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Access denied")
     
     status_map = {

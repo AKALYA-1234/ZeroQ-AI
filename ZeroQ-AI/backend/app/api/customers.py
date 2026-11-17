@@ -1,13 +1,21 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from typing import Optional, List
+from datetime import datetime
+
 from app.database.connection import get_db
 from app.core.dependencies import get_current_customer
 from app.core.security import verify_password, get_password_hash
 from app.models.user import User
-from app.models.notification import CustomerProfile
+from app.models.notification import CustomerProfile, ModelPrediction
 from app.schemas.customer import CustomerProfileUpdate, CustomerProfileResponse, PasswordChange, NotificationPreferences
+from app.ml.model_service import evaluate_nlp_query
 
 router = APIRouter()
+
+class NLPQueryRequest(BaseModel):
+    query: str
 
 @router.get("/profile")
 def get_profile(current_user: User = Depends(get_current_customer), db: Session = Depends(get_db)):
@@ -21,13 +29,13 @@ def get_profile(current_user: User = Depends(get_current_customer), db: Session 
         "id": profile.id,
         "user_id": profile.user_id,
         "email": current_user.email,
-        "full_name": profile.full_name,
-        "contact_number": profile.contact_number,
-        "organization": profile.organization,
-        "job_title": profile.job_title,
-        "country": profile.country,
-        "city": profile.city,
-        "address": profile.address,
+        "full_name": profile.full_name or "Quality Customer",
+        "contact_number": profile.contact_number or "",
+        "organization": profile.organization or "Enterprise Client",
+        "job_title": profile.job_title or "Quality Manager",
+        "country": profile.country or "India",
+        "city": profile.city or "",
+        "address": profile.address or "",
         "pref_complaint_submission": profile.pref_complaint_submission,
         "pref_status_updates": profile.pref_status_updates,
         "pref_investigation_updates": profile.pref_investigation_updates,
@@ -101,5 +109,60 @@ def update_notification_prefs(
     profile.pref_investigation_updates = prefs.pref_investigation_updates
     profile.pref_resolution = prefs.pref_resolution
     profile.pref_email = prefs.pref_email
+    
     db.commit()
-    return {"message": "Notification preferences updated"}
+    return {"message": "Notification preferences updated successfully"}
+
+
+# ── Phase 3: NLP Query Pipeline Endpoints ─────────────────────────────────
+
+@router.post("/query-prediction")
+def submit_query_prediction(
+    body: NLPQueryRequest,
+    current_user: User = Depends(get_current_customer),
+    db: Session = Depends(get_db)
+):
+    """
+    User Panel Natural Language Query Prediction:
+    Extracts entities -> executes model prediction -> persists to DB -> returns result + explanation.
+    """
+    if not body.query or not body.query.strip():
+        raise HTTPException(status_code=400, detail="Query string cannot be empty.")
+
+    result = evaluate_nlp_query(body.query.strip(), user_id=current_user.id, db_session=db)
+    return result
+
+
+@router.get("/query-predictions/history")
+def get_query_predictions_history(
+    limit: int = Query(20, ge=1, le=100),
+    current_user: User = Depends(get_current_customer),
+    db: Session = Depends(get_db)
+):
+    """
+    Returns persistent query history for the current user.
+    """
+    preds = db.query(ModelPrediction).filter(
+        ModelPrediction.created_by == current_user.id,
+        ModelPrediction.raw_query.isnot(None)
+    ).order_by(ModelPrediction.created_at.desc()).limit(limit).all()
+
+    items = []
+    for p in preds:
+        res = p.prediction_result or {}
+        items.append({
+            "prediction_id": p.prediction_id,
+            "raw_query": p.raw_query,
+            "parsed_fields": p.parsed_fields,
+            "parse_confidence": p.parse_confidence,
+            "prediction": res.get("prediction"),
+            "risk_level": res.get("risk_level", "Low"),
+            "predicted_severity": res.get("predicted_severity", "low"),
+            "complaint_probability": res.get("complaint_probability"),
+            "confidence": p.confidence_score,
+            "explanation": p.explanation or res.get("explanation"),
+            "contributing_factors": res.get("contributing_factors", []),
+            "created_at": p.created_at.isoformat() if p.created_at else None
+        })
+
+    return {"total": len(items), "items": items}

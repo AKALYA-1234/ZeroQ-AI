@@ -13,6 +13,7 @@ export default function CustomerLayout() {
 
   const navItems = [
     { path: '/customer/home', label: 'Home' },
+    { path: '/customer/query-prediction', label: 'AI Risk Predictor' },
     { path: '/customer/submit-complaint', label: 'Submit Complaint' },
     { path: '/customer/track-complaint', label: 'Track Complaint' },
     { path: '/customer/my-complaints', label: 'My Complaints' },
@@ -23,16 +24,16 @@ export default function CustomerLayout() {
     navigate('/login')
   }
 
-  // Fallback display values if user profile is still loading or empty
-  const displayName = user?.full_name || 'Sarah Jenkins'
-  const displayOrg = user?.organization || 'Apex Dynamics'
-  const initials = (displayName || 'SJ')
+  // Display values from authenticated customer profile
+  const displayName = user?.full_name || (user?.email ? user.email.split('@')[0] : 'Customer')
+  const displayOrg = user?.organization || 'Quality Partner'
+  const initials = (displayName || 'CP')
     .split(' ')
     .filter(Boolean)
     .map(n => n[0])
     .join('')
     .substring(0, 2)
-    .toUpperCase() || 'SJ'
+    .toUpperCase() || 'CP'
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex flex-col font-sans">

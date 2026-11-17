@@ -1,194 +1,452 @@
 """
-ZeroQ AI — ML Model Service
-Loads the trained XGBoost model and provides prediction capabilities.
-The model is a binary classifier (complaint risk: 0=low, 1=high)
-trained with 10,038 features (TF-IDF text + encoded categoricals).
+ZeroQ AI — Production Machine Learning Model Service
+Loads and caches the trained XGBoost binary classification model,
+preprocessor, decision threshold, and feature importance artifacts.
+Provides batch risk prediction, hypothetical forward-looking condition scoring,
+and natural language query parsing & evaluation.
 """
 
 import os
+import sys
 import logging
+from typing import Optional, Dict, Any, List, Tuple
+from datetime import datetime
 import numpy as np
-from typing import Optional, Dict, Any, List
+import pandas as pd
+import joblib
 
 logger = logging.getLogger(__name__)
 
-# ── Model Configuration ──────────────────────────────────────────────────
-MODEL_PATH = os.path.join(
-    os.path.dirname(__file__), "..", "..", "..", "final_xgboost_model.joblib"
+# ── Paths to Trained Artifacts & Data ─────────────────────────────────────
+# Application trained model
+APP_MODEL_PATH = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..", "models", "trained", "final_xgboost_model.joblib")
 )
+# Model training workspace artifacts
+MODEL_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "Model"))
+PREPROCESSOR_PATH = os.path.join(MODEL_DIR, "model_ready_data", "preprocessor.joblib")
+THRESHOLD_PATH = os.path.join(MODEL_DIR, "model_training", "final_xgboost", "final_threshold.joblib")
+FEATURE_NAMES_PATH = os.path.join(MODEL_DIR, "model_ready_data", "transformed_feature_names.csv")
+IMPORTANCE_PATH = os.path.join(MODEL_DIR, "model_training", "final_xgboost", "feature_importance.csv")
+METRICS_PATH = os.path.join(MODEL_DIR, "model_training", "final_xgboost", "final_model_metrics.csv")
+PRE_DISPATCH_CSV = os.path.join(MODEL_DIR, "feature_engineered_data", "batch_features_pre_dispatch.csv")
+TRAIN_RAW_CSV = os.path.join(MODEL_DIR, "model_ready_data", "train_raw.csv")
+
 MODEL_VERSION = "xgboost-v1.0-final"
+DEFAULT_THRESHOLD = 0.325
 N_FEATURES = 10038
 
-# ── Singleton Model Holder ───────────────────────────────────────────────
+# ── Singleton Cache ───────────────────────────────────────────────────────
 _model = None
+_preprocessor = None
+_threshold = DEFAULT_THRESHOLD
+_feature_names = None
+_feature_importance = None
+_training_metrics = {}
+_baseline_defaults = {}
+_pre_dispatch_cache = None
 _model_loaded = False
 _load_error: Optional[str] = None
 
 
-def _load_model():
-    """Load the XGBoost model from disk (lazy singleton)."""
-    global _model, _model_loaded, _load_error
+def _init_model_service():
+    """Load and cache model artifacts into memory once at startup."""
+    global _model, _preprocessor, _threshold, _feature_names
+    global _feature_importance, _training_metrics, _baseline_defaults
+    global _pre_dispatch_cache, _model_loaded, _load_error
 
     if _model_loaded:
         return _model
 
-    abs_path = os.path.abspath(MODEL_PATH)
-    logger.info(f"Loading XGBoost model from: {abs_path}")
-
-    if not os.path.exists(abs_path):
-        _load_error = f"Model file not found: {abs_path}"
-        logger.error(_load_error)
-        _model_loaded = True
-        return None
-
+    logger.info(f"Initializing ZeroQ AI Model Service from {APP_MODEL_PATH}...")
     try:
-        import joblib
-        _model = joblib.load(abs_path)
+        # 1. Load trained XGBoost model
+        if not os.path.exists(APP_MODEL_PATH):
+            # Fallback to Model directory if app path not found
+            fallback = os.path.join(MODEL_DIR, "model_training", "final_xgboost", "final_xgboost_model.joblib")
+            if os.path.exists(fallback):
+                _model = joblib.load(fallback)
+            else:
+                raise FileNotFoundError(f"Trained model artifact not found at {APP_MODEL_PATH}")
+        else:
+            _model = joblib.load(APP_MODEL_PATH)
+
+        # 2. Load Preprocessor
+        if os.path.exists(PREPROCESSOR_PATH):
+            _preprocessor = joblib.load(PREPROCESSOR_PATH)
+        else:
+            raise FileNotFoundError(f"Preprocessor not found at {PREPROCESSOR_PATH}")
+
+        # 3. Load Decision Threshold
+        if os.path.exists(THRESHOLD_PATH):
+            _threshold = float(joblib.load(THRESHOLD_PATH))
+        else:
+            _threshold = DEFAULT_THRESHOLD
+
+        # 4. Load Transformed Feature Names & Importance
+        if os.path.exists(FEATURE_NAMES_PATH) and os.path.exists(IMPORTANCE_PATH):
+            fnames_df = pd.read_csv(FEATURE_NAMES_PATH)
+            imp_df = pd.read_csv(IMPORTANCE_PATH)
+            merged = imp_df.merge(fnames_df, left_on="feature_index", right_on="Feature_Index", how="left")
+            _feature_importance = merged.sort_values(by="importance", ascending=False)
+            _feature_names = fnames_df["Feature_Name"].tolist()
+
+        # 5. Load Training Metrics
+        if os.path.exists(METRICS_PATH):
+            m_df = pd.read_csv(METRICS_PATH)
+            if len(m_df) > 0:
+                _training_metrics = m_df.iloc[0].to_dict()
+
+        # 6. Precompute Baseline Feature Defaults for free-form queries
+        if os.path.exists(TRAIN_RAW_CSV):
+            tr_df = pd.read_csv(TRAIN_RAW_CSV, nrows=5000)
+            feat_df = tr_df.drop(columns=["complaint_within_90_days"], errors="ignore")
+            num_meds = feat_df.select_dtypes(include=[np.number]).median().to_dict()
+            cat_modes = feat_df.select_dtypes(include=["object"]).mode().iloc[0].to_dict()
+            _baseline_defaults = {**num_meds, **cat_modes}
+
+        # 7. Index pre-dispatch batch features for fast O(1) batch lookup
+        if os.path.exists(PRE_DISPATCH_CSV):
+            pdf = pd.read_csv(PRE_DISPATCH_CSV)
+            # Store subset of columns needed for preprocessor
+            expected_cols = list(_preprocessor.feature_names_in_)
+            cols_to_keep = ["batch_id"] + [c for c in expected_cols if c in pdf.columns]
+            _pre_dispatch_cache = pdf[cols_to_keep].set_index("batch_id")
+
         _model_loaded = True
         _load_error = None
         logger.info(
-            f"Model loaded successfully. "
-            f"Type: {type(_model).__name__}, "
-            f"Features: {_model.n_features_in_}, "
-            f"Classes: {_model.classes_.tolist()}"
+            f"ZeroQ AI ML Service initialized successfully. "
+            f"Model: {type(_model).__name__}, Features: {_model.n_features_in_}, "
+            f"Threshold: {_threshold:.4f}, Baseline Features: {len(_baseline_defaults)}"
         )
         return _model
+
     except Exception as e:
         _load_error = str(e)
         _model_loaded = True
-        logger.error(f"Failed to load model: {e}")
+        logger.error(f"Failed to initialize ML Service: {e}", exc_info=True)
         return None
 
 
 def get_model():
-    """Return the loaded model (or None if unavailable)."""
-    return _load_model()
+    """Return the cached XGBoost model."""
+    return _init_model_service()
 
 
 def is_model_available() -> bool:
-    """Check if the model was loaded successfully."""
-    _load_model()
-    return _model is not None
+    """Check if the model and preprocessor are active."""
+    _init_model_service()
+    return _model is not None and _preprocessor is not None
 
 
 def get_model_error() -> Optional[str]:
-    """Return the model loading error, if any."""
-    _load_model()
+    """Return initialization error message, if any."""
+    _init_model_service()
     return _load_error
 
 
-# ── Feature Engineering ──────────────────────────────────────────────────
-# The original model was trained with 10,038 features.
-# Since the original feature pipeline (TF-IDF vectorizer + encoder) was not
-# saved alongside the model, we reconstruct a compatible feature vector.
-#
-# Strategy: Build a sparse feature vector of size 10,038 using deterministic
-# hashing of input features (hashing trick), which provides a reasonable
-# approximation for the original TF-IDF + one-hot encoding pipeline.
-
-def _hash_feature(name: str, value: str, n_buckets: int) -> int:
-    """Deterministic feature hashing into a bucket index."""
-    combined = f"{name}={value}"
-    h = hash(combined) % n_buckets
-    return h if h >= 0 else h + n_buckets
+def get_threshold() -> float:
+    """Return optimal decision threshold (default 0.325)."""
+    _init_model_service()
+    return _threshold
 
 
-def _text_to_features(text: str, start_idx: int, n_buckets: int) -> Dict[int, float]:
-    """Convert text into hashed TF-IDF-like features."""
-    if not text:
-        return {}
-
-    features = {}
-    # Tokenize: lowercase, split on non-alpha
-    import re
-    tokens = re.findall(r'[a-z0-9]+', text.lower())
-
-    if not tokens:
-        return {}
-
-    # Term frequency
-    tf = {}
-    for token in tokens:
-        tf[token] = tf.get(token, 0) + 1
-
-    # Normalize by document length
-    max_tf = max(tf.values()) if tf else 1
-    for token, count in tf.items():
-        idx = start_idx + (hash(token) % n_buckets)
-        if idx < 0:
-            idx += n_buckets
-        idx = idx % N_FEATURES
-        features[idx] = 0.5 + 0.5 * (count / max_tf)  # Augmented TF
-
-    return features
-
-
-def build_feature_vector(
-    product_name: Optional[str] = None,
-    product_category: Optional[str] = None,
-    complaint_category: Optional[str] = None,
-    severity: Optional[str] = None,
-    description: Optional[str] = None,
-    facility: Optional[str] = None,
-    batch_id: Optional[str] = None,
-    title: Optional[str] = None,
-    **extra_fields,
-) -> np.ndarray:
-    """
-    Build a feature vector of size 10,038 from complaint/product inputs.
-
-    The vector is constructed using the hashing trick to map categorical
-    and text features into the same dimensional space the model expects.
-    """
-    vec = np.zeros(N_FEATURES, dtype=np.float32)
-
-    # ── Categorical features (first ~100 buckets) ────────────────────
-    cat_fields = {
-        "product": product_name or "",
-        "product_category": product_category or "",
-        "complaint_category": complaint_category or "",
-        "severity": severity or "",
-        "facility": facility or "",
+def get_model_metadata() -> Dict[str, Any]:
+    """Return comprehensive metadata about the model, preprocessor, and metrics."""
+    _init_model_service()
+    return {
+        "available": is_model_available(),
+        "model_version": MODEL_VERSION,
+        "model_type": "Binary Classifier (XGBClassifier)",
+        "algorithm": "Gradient Boosted Decision Trees (XGBoost)",
+        "n_features_in": _model.n_features_in_ if _model else N_FEATURES,
+        "raw_features_count": len(_preprocessor.feature_names_in_) if _preprocessor else 54,
+        "threshold": _threshold,
+        "classes": _model.classes_.tolist() if _model and hasattr(_model, "classes_") else [0, 1],
+        "target_definition": "complaint_within_90_days (1=Complaint within 90 days of dispatch, 0=Zero complaints)",
+        "training_metrics": _training_metrics,
+        "error": _load_error
     }
 
-    for field_name, field_value in cat_fields.items():
-        if field_value:
-            idx = _hash_feature(field_name, field_value, 100)
-            vec[idx] = 1.0
 
-    # ── Severity numeric encoding (indices 100-105) ──────────────────
-    severity_map = {
-        "low": 0.2, "medium": 0.4, "high": 0.7, "critical": 1.0
+def get_feature_importance(top_n: int = 20) -> List[Dict[str, Any]]:
+    """Return top global feature importances with descriptive names."""
+    _init_model_service()
+    if _feature_importance is None or len(_feature_importance) == 0:
+        return []
+    
+    top_df = _feature_importance.head(top_n)
+    results = []
+    for _, row in top_df.iterrows():
+        raw_name = str(row.get("Feature_Name", f"feature_{row['feature_index']}"))
+        clean_name = raw_name.replace("categorical__", "").replace("numeric__", "").replace("_", " ")
+        results.append({
+            "feature_index": int(row["feature_index"]),
+            "feature_name": clean_name,
+            "raw_feature_name": raw_name,
+            "importance": round(float(row["importance"]), 5)
+        })
+    return results
+
+
+def _build_feature_row(user_inputs: Dict[str, Any]) -> pd.DataFrame:
+    """
+    Constructs a 54-feature DataFrame matching the preprocessor schema.
+    Applies baseline defaults for unspecified features.
+    """
+    _init_model_service()
+    row = dict(_baseline_defaults)
+
+    # Apply user provided fields
+    if "units_produced" in user_inputs and user_inputs["units_produced"] is not None:
+        row["units_produced"] = float(user_inputs["units_produced"])
+    if "process_temperature_c" in user_inputs and user_inputs["process_temperature_c"] is not None:
+        row["process_temperature_c"] = float(user_inputs["process_temperature_c"])
+    if "ambient_humidity_pct" in user_inputs and user_inputs["ambient_humidity_pct"] is not None:
+        row["ambient_humidity_pct"] = float(user_inputs["ambient_humidity_pct"])
+    if "line_pressure_bar" in user_inputs and user_inputs["line_pressure_bar"] is not None:
+        row["line_pressure_bar"] = float(user_inputs["line_pressure_bar"])
+    if "sealing_temperature_c" in user_inputs and user_inputs["sealing_temperature_c"] is not None:
+        row["sealing_temperature_c"] = float(user_inputs["sealing_temperature_c"])
+    if "process_deviation_flag" in user_inputs and user_inputs["process_deviation_flag"] is not None:
+        row["process_deviation_flag"] = int(user_inputs["process_deviation_flag"])
+    if "supplier_quality_grade" in user_inputs and user_inputs["supplier_quality_grade"]:
+        row["supplier_quality_grade"] = str(user_inputs["supplier_quality_grade"])
+    if "production_shift" in user_inputs and user_inputs["production_shift"]:
+        row["production_shift"] = str(user_inputs["production_shift"])
+    if "product_name" in user_inputs and user_inputs["product_name"]:
+        row["product_product_name"] = str(user_inputs["product_name"])
+    if "product_category" in user_inputs and user_inputs["product_category"]:
+        row["product_product_category"] = str(user_inputs["product_category"])
+    if "facility_name" in user_inputs and user_inputs["facility_name"]:
+        row["facility_facility_name"] = str(user_inputs["facility_name"])
+    if "facility_state" in user_inputs and user_inputs["facility_state"]:
+        row["facility_state"] = str(user_inputs["facility_state"])
+    if "packaging_material_name" in user_inputs and user_inputs["packaging_material_name"]:
+        row["packaging_material_name"] = str(user_inputs["packaging_material_name"])
+
+    # Ensure all required preprocessor columns exist in the DataFrame
+    expected_cols = list(_preprocessor.feature_names_in_)
+    data = {c: [row.get(c, 0)] for c in expected_cols}
+    return pd.DataFrame(data)
+
+
+def _compute_contributing_factors(X_trans_row, top_n: int = 5) -> List[Dict[str, Any]]:
+    """
+    Identifies the key contributing features that drove the prediction
+    for a specific transformed sample.
+    """
+    if _feature_importance is None:
+        return []
+
+    indices = X_trans_row.indices
+    data = X_trans_row.data
+    contributions = []
+
+    for idx, val in zip(indices, data):
+        # Match with feature importance
+        imp_row = _feature_importance[_feature_importance["feature_index"] == idx]
+        if len(imp_row) > 0:
+            imp = float(imp_row["importance"].values[0])
+            fname = str(imp_row["Feature_Name"].values[0])
+            # Only consider meaningful non-zero contributions
+            clean_name = fname.replace("categorical__", "").replace("numeric__", "").replace("_", " ")
+            contributions.append({
+                "feature_index": int(idx),
+                "feature_name": clean_name,
+                "value": round(float(val), 2),
+                "importance": round(imp, 5),
+                "impact_score": round(imp * abs(val), 5)
+            })
+
+    contributions.sort(key=lambda x: x["importance"], reverse=True)
+    return contributions[:top_n]
+
+
+def _generate_explanation(prob: float, threshold: float, factors: List[Dict[str, Any]], context_type: str = "batch") -> str:
+    """Generate a clear plain-language risk explanation."""
+    pct = round(prob * 100, 1)
+    thresh_pct = round(threshold * 100, 1)
+
+    if prob >= threshold:
+        risk_desc = f"ELEVATED RISK ({pct}% probability, exceeding the {thresh_pct}% intervention threshold)."
+        action_advice = "Pre-dispatch quality quarantine and sealing verification recommended."
+    elif prob >= 0.20:
+        risk_desc = f"MODERATE RISK ({pct}% probability, below the {thresh_pct}% threshold)."
+        action_advice = "Standard sampling inspection advised before release."
+    else:
+        risk_desc = f"LOW RISK ({pct}% probability, well below the {thresh_pct}% threshold)."
+        action_advice = "Production conditions nominal; proceed with standard dispatch."
+
+    factor_descriptions = []
+    for f in factors[:3]:
+        factor_descriptions.append(f"{f['feature_name']} (weight: {f['importance']})")
+
+    drivers = ", ".join(factor_descriptions) if factor_descriptions else "nominal operating parameters"
+    return f"{risk_desc} Key risk indicators influencing this evaluation: {drivers}. {action_advice}"
+
+
+def predict_batch(batch_id: str) -> Dict[str, Any]:
+    """
+    Runs model prediction on a historical or active batch from the dataset.
+    """
+    _init_model_service()
+    if not is_model_available():
+        return {"status": "error", "message": _load_error or "Model not loaded"}
+
+    # Look up batch in pre_dispatch cache
+    batch_code = batch_id.strip().upper()
+    if _pre_dispatch_cache is not None and batch_code in _pre_dispatch_cache.index:
+        batch_row = _pre_dispatch_cache.loc[[batch_code]]
+        # Match columns expected by preprocessor
+        expected_cols = list(_preprocessor.feature_names_in_)
+        aligned_df = batch_row[expected_cols]
+    else:
+        # Batch not in historical pre-dispatch CSV, use defaults with batch_id
+        aligned_df = _build_feature_row({"batch_id": batch_code})
+
+    X_trans = _preprocessor.transform(aligned_df)
+    probs = _model.predict_proba(X_trans)[0]
+    p_complaint = float(probs[1])
+    is_high_risk = bool(p_complaint >= _threshold)
+    
+    factors = _compute_contributing_factors(X_trans[0])
+    explanation = _generate_explanation(p_complaint, _threshold, factors, context_type="batch")
+
+    severity = "critical" if p_complaint >= 0.50 else ("high" if is_high_risk else ("medium" if p_complaint >= 0.20 else "low"))
+
+    return {
+        "status": "success",
+        "batch_id": batch_code,
+        "prediction": 1 if is_high_risk else 0,
+        "is_high_risk": is_high_risk,
+        "predicted_severity": severity,
+        "risk_level": "High" if is_high_risk else "Low",
+        "complaint_probability": round(p_complaint, 4),
+        "zero_complaint_probability": round(float(probs[0]), 4),
+        "confidence": round(float(np.max(probs)), 4),
+        "threshold": _threshold,
+        "contributing_factors": factors,
+        "explanation": explanation,
+        "model_version": MODEL_VERSION
     }
-    if severity and severity.lower() in severity_map:
-        vec[100] = severity_map[severity.lower()]
-
-    # ── Text features — description (buckets 200-5200 → 5000 buckets) ─
-    desc_features = _text_to_features(description or "", 200, 5000)
-    for idx, val in desc_features.items():
-        vec[idx] = val
-
-    # ── Text features — title (buckets 5200-10000 → 4800 buckets) ────
-    title_features = _text_to_features(title or "", 5200, 4800)
-    for idx, val in title_features.items():
-        vec[idx] = val
-
-    # ── Batch ID hash (index 10001-10030) ────────────────────────────
-    if batch_id:
-        bidx = 10001 + (hash(batch_id) % 30)
-        if bidx < N_FEATURES:
-            vec[bidx] = 1.0
-
-    # ── Extra fields as hashed features ──────────────────────────────
-    for k, v in extra_fields.items():
-        if v is not None:
-            idx = _hash_feature(k, str(v), N_FEATURES)
-            vec[idx] = 1.0
-
-    return vec
 
 
-# ── Prediction ───────────────────────────────────────────────────────────
+def predict_from_features(inputs: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Runs model prediction on arbitrary user parameters,
+    interpolating baseline historical medians for missing values.
+    """
+    _init_model_service()
+    if not is_model_available():
+        return {"status": "error", "message": _load_error or "Model not loaded"}
+
+    df_row = _build_feature_row(inputs)
+    X_trans = _preprocessor.transform(df_row)
+    probs = _model.predict_proba(X_trans)[0]
+    p_complaint = float(probs[1])
+    is_high_risk = bool(p_complaint >= _threshold)
+
+    factors = _compute_contributing_factors(X_trans[0])
+    explanation = _generate_explanation(p_complaint, _threshold, factors, context_type="conditions")
+    severity = "critical" if p_complaint >= 0.50 else ("high" if is_high_risk else ("medium" if p_complaint >= 0.20 else "low"))
+
+    return {
+        "status": "success",
+        "prediction": 1 if is_high_risk else 0,
+        "is_high_risk": is_high_risk,
+        "predicted_severity": severity,
+        "risk_level": "High" if is_high_risk else "Low",
+        "complaint_probability": round(p_complaint, 4),
+        "zero_complaint_probability": round(float(probs[0]), 4),
+        "confidence": round(float(np.max(probs)), 4),
+        "threshold": _threshold,
+        "contributing_factors": factors,
+        "explanation": explanation,
+        "model_version": MODEL_VERSION
+    }
+
+
+def evaluate_nlp_query(query: str, user_id: Optional[int] = None, db_session = None) -> Dict[str, Any]:
+    """
+    End-to-end NLP query execution pipeline:
+    1. Parse free-text into structured manufacturing parameters
+    2. Handle missing or ambiguous fields with documented defaults
+    3. Generate XGBoost model prediction
+    4. Store query, parsed fields, and prediction in database
+    5. Return prediction result + explanation
+    """
+    from app.ml.nlp_parser import parse_manufacturing_query
+    from app.models.notification import ModelPrediction
+
+    extracted, confidence, clues, assumed_defaults = parse_manufacturing_query(query)
+
+    if confidence < 0.10 and not extracted:
+        return {
+            "status": "invalid_input",
+            "message": (
+                "Could not identify manufacturing quality entities in your query. "
+                "Please specify a Batch ID (e.g. BAT000004), Product (e.g. Classic Biscuits), "
+                "Manufacturing Facility (e.g. Pune Unit), or operating conditions (temperature, humidity, pressure)."
+            ),
+            "raw_query": query,
+            "parsed_fields": {},
+            "parse_confidence": 0.0
+        }
+
+    # Execute prediction: batch lookup or condition feature vector
+    if "batch_id" in extracted:
+        pred_result = predict_batch(extracted["batch_id"])
+    else:
+        pred_result = predict_from_features(extracted)
+
+    if pred_result.get("status") != "success":
+        return pred_result
+
+    # Persist in Database if db_session is provided
+    prediction_record_id = f"PRED-{datetime.utcnow().year}-{os.urandom(3).hex().upper()}"
+    if db_session:
+        try:
+            db_record = ModelPrediction(
+                prediction_id=prediction_record_id,
+                model_version=MODEL_VERSION,
+                raw_query=query,
+                parsed_fields=extracted,
+                parse_confidence=confidence,
+                input_features=extracted,
+                prediction_result=pred_result,
+                confidence_score=str(pred_result.get("confidence")),
+                explanation=pred_result.get("explanation"),
+                created_by=user_id,
+                created_at=datetime.utcnow()
+            )
+            db_session.add(db_record)
+            db_session.commit()
+        except Exception as e:
+            logger.warning(f"Failed to persist prediction record to DB: {e}")
+
+    return {
+        "status": "success",
+        "prediction_id": prediction_record_id,
+        "raw_query": query,
+        "parsed_fields": extracted,
+        "parse_confidence": confidence,
+        "clues_extracted": clues,
+        "assumed_defaults": assumed_defaults,
+        "prediction": pred_result.get("prediction"),
+        "risk_level": pred_result.get("risk_level"),
+        "predicted_severity": pred_result.get("predicted_severity"),
+        "complaint_probability": pred_result.get("complaint_probability"),
+        "zero_complaint_probability": pred_result.get("zero_complaint_probability"),
+        "confidence": pred_result.get("confidence"),
+        "threshold": _threshold,
+        "contributing_factors": pred_result.get("contributing_factors"),
+        "explanation": pred_result.get("explanation"),
+        "model_version": MODEL_VERSION,
+        "created_at": datetime.utcnow().isoformat()
+    }
+
 
 def predict_complaint_risk(
     product_name: Optional[str] = None,
@@ -199,188 +457,20 @@ def predict_complaint_risk(
     facility: Optional[str] = None,
     batch_id: Optional[str] = None,
     title: Optional[str] = None,
-    **extra_fields,
+    **kwargs
 ) -> Dict[str, Any]:
     """
-    Run the XGBoost model to predict complaint risk.
-
-    Returns:
-        {
-            "risk_class": 0 or 1,
-            "risk_label": "Low Risk" or "High Risk",
-            "risk_probability": float (0-1),
-            "confidence": float (0-1),
-            "model_version": str,
-            "feature_summary": dict,
-        }
+    Backward-compatible wrapper for existing API routes,
+    redirecting to the production XGBoost model service.
     """
-    model = get_model()
-    if model is None:
-        return {
-            "status": "error",
-            "message": get_model_error() or "Model not available",
-            "risk_class": None,
-            "risk_label": "Unknown",
-            "risk_probability": None,
-            "confidence": 0.0,
-            "model_version": None,
-        }
+    if batch_id and str(batch_id).startswith("BAT"):
+        return predict_batch(batch_id)
 
-    # Build feature vector
-    feature_vec = build_feature_vector(
-        product_name=product_name,
-        product_category=product_category,
-        complaint_category=complaint_category,
-        severity=severity,
-        description=description,
-        facility=facility,
-        batch_id=batch_id,
-        title=title,
-        **extra_fields,
-    )
-
-    # Reshape for prediction (1 sample)
-    X = feature_vec.reshape(1, -1)
-
-    try:
-        # Get probability predictions
-        proba = model.predict_proba(X)[0]
-        predicted_class = int(model.predict(X)[0])
-
-        risk_probability = float(proba[1])  # P(class=1) = high risk
-        confidence = float(max(proba))
-
-        # Map severity based on risk probability
-        if risk_probability >= 0.75:
-            predicted_severity = "critical"
-            risk_label = "Critical Risk"
-        elif risk_probability >= 0.5:
-            predicted_severity = "high"
-            risk_label = "High Risk"
-        elif risk_probability >= 0.3:
-            predicted_severity = "medium"
-            risk_label = "Medium Risk"
-        else:
-            predicted_severity = "low"
-            risk_label = "Low Risk"
-
-        # Determine likely category based on input
-        predicted_category = complaint_category or "quality_defect"
-
-        return {
-            "status": "success",
-            "risk_class": predicted_class,
-            "risk_label": risk_label,
-            "risk_probability": round(risk_probability, 4),
-            "predicted_severity": predicted_severity,
-            "predicted_category": predicted_category,
-            "confidence": round(confidence, 4),
-            "model_version": MODEL_VERSION,
-            "feature_summary": {
-                "total_features": N_FEATURES,
-                "active_features": int(np.count_nonzero(feature_vec)),
-                "product": product_name,
-                "category": complaint_category,
-                "severity_input": severity,
-                "has_description": bool(description),
-                "has_title": bool(title),
-            },
-        }
-
-    except Exception as e:
-        logger.error(f"Prediction error: {e}")
-        return {
-            "status": "error",
-            "message": str(e),
-            "risk_class": None,
-            "risk_label": "Error",
-            "risk_probability": None,
-            "confidence": 0.0,
-            "model_version": MODEL_VERSION,
-        }
-
-
-def get_model_metadata() -> Dict[str, Any]:
-    """Return model metadata and training info."""
-    model = get_model()
-    if model is None:
-        return {
-            "available": False,
-            "error": get_model_error(),
-        }
-
-    return {
-        "available": True,
-        "model_type": "XGBClassifier",
-        "model_version": MODEL_VERSION,
-        "algorithm": "XGBoost (Extreme Gradient Boosting)",
-        "objective": "binary:logistic",
-        "task": "Complaint Risk Classification",
-        "classes": model.classes_.tolist(),
-        "class_labels": {0: "Low Risk", 1: "High Risk"},
-        "n_features": model.n_features_in_,
-        "n_estimators": model.get_params().get("n_estimators", None),
-        "best_iteration": getattr(model, "best_iteration", None),
-        "best_score_auc": round(getattr(model, "best_score", 0), 4),
-        "hyperparameters": {
-            "max_depth": model.get_params().get("max_depth"),
-            "learning_rate": model.get_params().get("learning_rate"),
-            "n_estimators": model.get_params().get("n_estimators"),
-            "subsample": model.get_params().get("subsample"),
-            "colsample_bytree": model.get_params().get("colsample_bytree"),
-            "reg_alpha": model.get_params().get("reg_alpha"),
-            "reg_lambda": model.get_params().get("reg_lambda"),
-            "min_child_weight": model.get_params().get("min_child_weight"),
-            "gamma": model.get_params().get("gamma"),
-            "eval_metric": model.get_params().get("eval_metric"),
-            "early_stopping_rounds": model.get_params().get("early_stopping_rounds"),
-        },
-        "training_metrics": {
-            "best_auc": round(getattr(model, "best_score", 0), 4),
-            "best_iteration": getattr(model, "best_iteration", None),
-            "total_boosting_rounds": model.get_params().get("n_estimators"),
-        },
-        "file_path": os.path.abspath(MODEL_PATH),
-        "file_size_kb": round(os.path.getsize(os.path.abspath(MODEL_PATH)) / 1024, 1)
-        if os.path.exists(os.path.abspath(MODEL_PATH))
-        else None,
+    inputs = {
+        "product_name": product_name,
+        "product_category": product_category,
+        "facility_name": facility,
+        "supplier_quality_grade": kwargs.get("supplier_quality_grade", "A"),
+        "production_shift": kwargs.get("production_shift", "Morning")
     }
-
-
-def get_feature_importance(top_n: int = 20) -> List[Dict[str, Any]]:
-    """Get top N most important features from the model."""
-    model = get_model()
-    if model is None:
-        return []
-
-    importances = model.feature_importances_
-    top_indices = np.argsort(importances)[-top_n:][::-1]
-
-    # Map feature indices to interpretable names
-    feature_labels = {
-        0: "Product Type", 1: "Product Category", 2: "Complaint Category",
-        3: "Severity Level", 4: "Facility Location",
-        6: "Primary Text Feature", 8: "Secondary Text Feature",
-        14: "Description Context", 23: "Description Term",
-        31: "Product-Category Interaction", 100: "Severity Numeric",
-    }
-
-    results = []
-    for rank, idx in enumerate(top_indices, 1):
-        label = feature_labels.get(idx, f"Feature #{idx}")
-        if 200 <= idx < 5200:
-            label = f"Description Term (bucket {idx - 200})"
-        elif 5200 <= idx < 10000:
-            label = f"Title Term (bucket {idx - 5200})"
-        elif 10001 <= idx < 10031:
-            label = f"Batch Identifier (bucket {idx - 10001})"
-
-        results.append({
-            "rank": rank,
-            "feature_index": int(idx),
-            "feature_label": label,
-            "importance": round(float(importances[idx]), 6),
-        })
-
-    return results
-
+    return predict_from_features(inputs)

@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 
@@ -33,8 +33,7 @@ class AttachmentResponse(BaseModel):
     content_type: str
     uploaded_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class StatusHistoryResponse(BaseModel):
     id: int
@@ -45,8 +44,7 @@ class StatusHistoryResponse(BaseModel):
     notes: Optional[str] = None
     changed_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ComplaintResponse(BaseModel):
     id: int
@@ -69,5 +67,4 @@ class ComplaintResponse(BaseModel):
     resolved_date: Optional[datetime] = None
     attachments: List[AttachmentResponse] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

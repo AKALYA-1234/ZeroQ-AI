@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -11,31 +12,27 @@ from app.models import user, product, complaint, investigation, corrective_actio
 
 # Import routers
 from app.api import auth, customers, products, complaints, admin, predictions
+from app.ml.model_service import is_model_available
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    try:
+        Base.metadata.create_all(bind=engine)
+        # Pre-cache model
+        is_model_available()
+    except Exception as e:
+        print(f"Startup warning: {e}")
+    yield
 
 app = FastAPI(
     title="ZeroQ AI API",
     description="ABT-CPD Zero Customer Complaint: AI-Based Manufacturing Quality Analytics",
     version="1.0.0",
     docs_url="/api/docs",
-    redoc_url="/api/redoc"
+    redoc_url="/api/redoc",
+    lifespan=lifespan
 )
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-
-@app.on_event("startup")
-async def startup():
-    try:
-        Base.metadata.create_all(bind=engine)
-    except Exception as e:
-        print(f"Warning: Could not create tables: {e}")
 
 # Mount uploads
 if os.path.exists(settings.UPLOAD_DIR):

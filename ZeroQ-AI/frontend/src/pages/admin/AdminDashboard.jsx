@@ -114,7 +114,7 @@ export default function AdminDashboard() {
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Executive Dashboard</h1>
-          <p className="text-sm text-gray-500 mt-1">Monitor manufacturing quality, customer complaints, and AI-based performance across your production operations. Live synthetic complaint data.</p>
+          <p className="text-sm text-gray-500 mt-1">Monitor manufacturing quality, customer complaints, and AI-based performance across production operations from real 19-year dataset (2008-2026).</p>
         </div>
         <div className="flex items-center gap-2 mt-3 lg:mt-0">
           <button className="flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50">
@@ -155,7 +155,7 @@ export default function AdminDashboard() {
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Total Complaints</div>
           <div className="text-3xl font-bold text-gray-900">{totalComplaints.toLocaleString()}</div>
-          <div className="text-[10px] text-gray-400 mt-1">{kpis.data_note || 'Includes synthetic historical records'}</div>
+          <div className="text-[10px] text-gray-400 mt-1">{kpis.data_note || 'Historical dataset records'}</div>
         </div>
 
         {/* Open Complaints */}
