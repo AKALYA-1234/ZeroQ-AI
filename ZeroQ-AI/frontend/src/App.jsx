@@ -24,6 +24,7 @@ import RootCauseAnalysis from './pages/admin/RootCauseAnalysis'
 import RiskAssessment from './pages/admin/RiskAssessment'
 import AIPredictionCenter from './pages/admin/AIPredictionCenter'
 import CAPAManagement from './pages/admin/CAPAManagement'
+import AIImpactAnalytics from './pages/admin/AIImpactAnalytics'
 
 function ProtectedCustomerRoute({ children }) {
   const { isAuthenticated, isCustomer, loading } = useAuth()
@@ -90,6 +91,7 @@ export default function App() {
           <Route path="risk-assessment" element={<RiskAssessment />} />
           <Route path="ai-prediction" element={<AIPredictionCenter />} />
           <Route path="capa" element={<CAPAManagement />} />
+          <Route path="ai-insights" element={<AIImpactAnalytics />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

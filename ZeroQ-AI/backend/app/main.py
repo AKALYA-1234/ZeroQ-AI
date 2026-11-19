@@ -3,16 +3,31 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
+import logging
+import threading
 from app.core.config import settings
 from app.database.base import Base
 from app.database.connection import engine
 
 # Import all models to register them with SQLAlchemy
-from app.models import user, product, complaint, investigation, corrective_action, notification
+from app.models import user, product, complaint, investigation, corrective_action, notification, intelligence as intelligence_models
 
 # Import routers
-from app.api import auth, customers, products, complaints, admin, predictions
+from app.api import auth, customers, products, complaints, admin, predictions, intelligence
 from app.ml.model_service import is_model_available
+
+def _warm_issue_intelligence():
+    from app.database.connection import SessionLocal
+    from app.intelligence.learning import get_classifier
+    from app.intelligence.retrieval import get_index
+    db = SessionLocal()
+    try:
+        get_classifier(db)
+        get_index(db)
+    except Exception as e:  # analysis still works lazily on first request
+        logging.getLogger(__name__).warning("Issue-intelligence warm-up failed: %s", e)
+    finally:
+        db.close()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -23,6 +38,8 @@ async def lifespan(app: FastAPI):
         is_model_available()
     except Exception as e:
         print(f"Startup warning: {e}")
+    # Warm the issue classifier + historical index off the request path.
+    threading.Thread(target=_warm_issue_intelligence, daemon=True).start()
     yield
 
 app = FastAPI(
@@ -44,6 +61,8 @@ app.include_router(products.router, prefix="/api/products", tags=["Products"])
 app.include_router(complaints.router, prefix="/api/complaints", tags=["Complaints"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
 app.include_router(predictions.router, prefix="/api/predictions", tags=["ML Predictions"])
+app.include_router(intelligence.router, prefix="/api/admin/intelligence", tags=["Issue Intelligence"])
+app.include_router(intelligence.ws_router, tags=["Real-time"])
 
 @app.get("/")
 def root():

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { FileText, Search, Filter, Eye, Clock, CheckCircle, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react'
 import api from '../../services/api'
+import { useLiveEvents } from '../../hooks/useLiveEvents'
 
 const SEVERITY_STYLES = { critical: 'bg-red-100 text-red-700', high: 'bg-orange-100 text-orange-700', medium: 'bg-amber-100 text-amber-700', low: 'bg-green-100 text-green-700' }
 const STATUS_STYLES = { submitted: 'bg-blue-100 text-blue-700', under_review: 'bg-amber-100 text-amber-700', investigating: 'bg-purple-100 text-purple-700', resolved: 'bg-green-100 text-green-700', rejected: 'bg-gray-100 text-gray-600' }
@@ -15,6 +16,7 @@ export default function MyComplaints() {
   const [search, setSearch] = useState('')
 
   useEffect(() => { fetchComplaints() }, [page])
+  useLiveEvents(() => { fetchComplaints() }, ['complaint.resolved', 'complaint.updated', 'analysis.completed'])
 
   const fetchComplaints = async () => {
     setLoading(true)

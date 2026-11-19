@@ -5,6 +5,7 @@ from app.models.complaint import Complaint, ComplaintAttachment, ComplaintStatus
 from app.models.investigation import Investigation
 from app.models.corrective_action import CorrectiveAction
 from app.models.notification import CustomerProfile, ModelPrediction, Notification, AuditLog
+from app.models.intelligence import IssueAnalysis, IncidentResolution, ResolutionFeedback, ModelTrainingRun
 
 __all__ = [
     "User",
@@ -21,4 +22,8 @@ __all__ = [
     "ModelPrediction",
     "Notification",
     "AuditLog",
+    "IssueAnalysis",
+    "IncidentResolution",
+    "ResolutionFeedback",
+    "ModelTrainingRun",
 ]

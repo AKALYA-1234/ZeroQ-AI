@@ -74,6 +74,14 @@ def _init_model_service():
         # 2. Load Preprocessor
         if os.path.exists(PREPROCESSOR_PATH):
             _preprocessor = joblib.load(PREPROCESSOR_PATH)
+            # Patch cross-version scikit-learn attribute changes (e.g. 1.7.x vs 1.9.x)
+            for _, trans, _ in getattr(_preprocessor, "transformers_", []):
+                if hasattr(trans, "steps"):
+                    for _, step in trans.steps:
+                        if hasattr(step, "_fit_dtype") and not hasattr(step, "_fill_dtype"):
+                            step._fill_dtype = step._fit_dtype
+                        elif hasattr(step, "_fill_dtype") and not hasattr(step, "_fit_dtype"):
+                            step._fit_dtype = step._fill_dtype
         else:
             raise FileNotFoundError(f"Preprocessor not found at {PREPROCESSOR_PATH}")
 

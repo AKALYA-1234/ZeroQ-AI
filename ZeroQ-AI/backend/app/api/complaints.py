@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, Form, Query
+from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
@@ -8,10 +10,15 @@ from app.database.connection import get_db
 from app.core.dependencies import get_current_customer, get_current_user
 from app.core.config import settings
 from app.models.complaint import Complaint, ComplaintAttachment, ComplaintStatusHistory
-from app.models.product import Product
+from app.models.product import Product, ProductionBatch
 from app.models.user import User
-from app.models.notification import CustomerProfile, ModelPrediction
-from app.ml.model_service import is_model_available, predict_complaint_risk
+from app.models.notification import CustomerProfile
+from app.models.intelligence import IssueAnalysis, IncidentResolution, ResolutionFeedback
+from app.api.intelligence import analyze_complaint_job, serialize_analysis, serialize_resolution
+from app.intelligence.realtime import broker, complaint_event_payload
+
+MAX_DESCRIPTION_CHARS = 8000
+SATISFIED_MIN_RATING = 4
 
 router = APIRouter()
 
@@ -25,11 +32,12 @@ def generate_complaint_id(db: Session) -> str:
 @router.post("/")
 @router.post("")
 async def submit_complaint(
+    background_tasks: BackgroundTasks,
     product_id: int = Form(...),
-    title: str = Form(...),
-    description: str = Form(...),
-    category: str = Form(...),
-    reported_severity: str = Form(...),
+    title: str = Form(..., max_length=500),
+    description: str = Form(..., max_length=MAX_DESCRIPTION_CHARS),
+    category: Optional[str] = Form(None),
+    reported_severity: Optional[str] = Form(None),
     batch_number: Optional[str] = Form(None),
     purchase_date: Optional[str] = Form(None),
     date_of_issue: Optional[str] = Form(None),
@@ -41,9 +49,17 @@ async def submit_complaint(
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
+    if not title.strip() or not description.strip():
+        raise HTTPException(status_code=422, detail="Title and description are required")
+    # Empty category / severity mean "let the AI identify it".
+    category = (category or "").strip() or None
+    reported_severity = (reported_severity or "").strip() or None
     
     profile = db.query(CustomerProfile).filter(CustomerProfile.user_id == current_user.id).first()
-    
+    batch = None
+    if batch_number and batch_number.strip():
+        batch = db.query(ProductionBatch).filter(ProductionBatch.batch_id == batch_number.strip().upper()).first()
+
     complaint_id = generate_complaint_id(db)
     
     complaint = Complaint(
@@ -55,6 +71,8 @@ async def submit_complaint(
         customer_contact=profile.contact_number if profile else None,
         customer_organization=profile.organization if profile else None,
         product_id=product_id,
+        batch_id=batch.id if batch else None,
+        facility_id=batch.facility_id if batch else None,
         title=title,
         description=description,
         category=category,
@@ -108,40 +126,14 @@ async def submit_complaint(
         )
         db.add(attachment)
 
-    # ── AI Model Risk Evaluation (Automated) ─────────────────────────
-    ai_prediction = None
-    if is_model_available():
-        try:
-            ai_prediction = predict_complaint_risk(
-                product_name=product.name if product else None,
-                complaint_category=category,
-                severity=reported_severity,
-                description=description,
-                title=title,
-                batch_id=batch_number,
-            )
-            if ai_prediction.get("status") == "success":
-                complaint.admin_severity = ai_prediction.get("predicted_severity")
-                pred_rec = ModelPrediction(
-                    prediction_id=f"PRED-{datetime.utcnow().year}-{uuid.uuid4().hex[:6].upper()}",
-                    model_version=ai_prediction.get("model_version"),
-                    input_features={
-                        "product": product.name if product else None,
-                        "category": category,
-                        "severity": reported_severity,
-                        "complaint_id": complaint.complaint_id,
-                    },
-                    prediction_result=ai_prediction,
-                    confidence_score=str(ai_prediction.get("confidence")),
-                    created_by=current_user.id,
-                )
-                db.add(pred_rec)
-        except Exception as e:
-            pass
-    
     db.commit()
     db.refresh(complaint)
-    
+
+    # Multilingual understanding + prediction runs after the response is sent.
+    background_tasks.add_task(analyze_complaint_job, db.get_bind(), complaint.id)
+    broker.publish("complaint.created", complaint_event_payload(complaint, {
+        "product": product.name, "title": complaint.title}), to_admins=True)
+
     return {
         "complaint_id": complaint.complaint_id,
         "id": complaint.id,
@@ -252,6 +244,8 @@ def get_complaint(complaint_id: str, current_user: User = Depends(get_current_cu
         "last_updated": complaint.last_updated,
         "resolved_date": complaint.resolved_date,
         "customer_visible_update": complaint.customer_visible_update,
+        "version": complaint.last_updated.isoformat() if complaint.last_updated else None,
+        **_intelligence_view(db, complaint),
         "attachments": [
             {
                 "id": a.id,
@@ -264,6 +258,47 @@ def get_complaint(complaint_id: str, current_user: User = Depends(get_current_cu
             for a in complaint.attachments
         ]
     }
+
+def _intelligence_view(db: Session, complaint: Complaint) -> dict:
+    analysis = db.query(IssueAnalysis).filter(IssueAnalysis.complaint_id == complaint.id).first()
+    resolution = db.query(IncidentResolution).filter(IncidentResolution.complaint_id == complaint.id).first()
+    feedback = db.query(ResolutionFeedback).filter(ResolutionFeedback.complaint_id == complaint.id).first()
+    return {
+        "ai_understanding": serialize_analysis(analysis, audience="customer"),
+        "resolution": serialize_resolution(resolution, audience="customer"),
+        "feedback": {"rating": feedback.rating, "satisfied": feedback.satisfied, "comment": feedback.comment,
+                     "created_at": feedback.created_at.isoformat()} if feedback else None,
+    }
+
+
+class FeedbackRequest(BaseModel):
+    rating: int = Field(ge=1, le=5)
+    comment: Optional[str] = Field(default=None, max_length=2000)
+
+
+@router.post("/{complaint_id}/feedback")
+def submit_feedback(complaint_id: str, body: FeedbackRequest,
+                    current_user: User = Depends(get_current_customer), db: Session = Depends(get_db)):
+    complaint = db.query(Complaint).filter(Complaint.complaint_id == complaint_id).first()
+    if not complaint:
+        raise HTTPException(status_code=404, detail="Complaint not found")
+    if complaint.submitted_by_user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    if complaint.status != "resolved":
+        raise HTTPException(status_code=409, detail="Feedback is accepted once the complaint is resolved")
+    fb = ResolutionFeedback(complaint_id=complaint.id, user_id=current_user.id, rating=body.rating,
+                            satisfied=body.rating >= SATISFIED_MIN_RATING,
+                            comment=(body.comment or "").strip() or None)
+    db.add(fb)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Feedback already submitted")
+    broker.publish("feedback.submitted", complaint_event_payload(complaint, {"rating": body.rating}),
+                   to_admins=True)
+    return {"rating": fb.rating, "satisfied": fb.satisfied, "comment": fb.comment}
+
 
 @router.get("/{complaint_id}/timeline")
 def get_complaint_timeline(complaint_id: str, current_user: User = Depends(get_current_customer), db: Session = Depends(get_db)):

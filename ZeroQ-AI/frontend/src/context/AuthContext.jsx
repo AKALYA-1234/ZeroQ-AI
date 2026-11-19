@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
+import { disconnect as disconnectLiveEvents } from '../services/liveEvents'
 import api from '../services/api'
 
 const AuthContext = createContext(null)
@@ -52,6 +53,7 @@ export function AuthProvider({ children }) {
   }
 
   const logout = () => {
+    disconnectLiveEvents()
     localStorage.removeItem('zeroq_token')
     localStorage.removeItem('zeroq_user')
     delete api.defaults.headers.common['Authorization']

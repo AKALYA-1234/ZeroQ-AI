@@ -51,8 +51,8 @@ export default function SubmitComplaint() {
       fd.append('product_id', parseInt(form.product_id) || 1)
       fd.append('title', form.title)
       fd.append('description', form.description)
-      fd.append('category', form.category)
-      fd.append('reported_severity', form.reported_severity)
+      if (form.category) fd.append('category', form.category)
+      if (form.reported_severity) fd.append('reported_severity', form.reported_severity)
       if (form.batch_number) fd.append('batch_number', form.batch_number)
       if (form.purchase_date) fd.append('purchase_date', form.purchase_date)
       if (form.date_of_issue) fd.append('date_of_issue', form.date_of_issue)
@@ -121,21 +121,22 @@ export default function SubmitComplaint() {
               <input type="text" required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" value={form.title} onChange={e => setForm({...form, title: e.target.value})} placeholder="Brief summary of the issue" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Description *</label>
-              <textarea required rows={5} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none" value={form.description} onChange={e => setForm({...form, description: e.target.value})} placeholder="Provide a detailed description of the issue..." />
+              <label htmlFor="complaint-description" className="block text-sm font-medium text-gray-700 mb-1">Description *</label>
+              <textarea id="complaint-description" required rows={5} maxLength={8000} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none" value={form.description} onChange={e => setForm({...form, description: e.target.value})} placeholder="Describe what went wrong, in your own words..." aria-describedby="description-language-hint" />
+              <p id="description-language-hint" className="text-xs text-gray-500 mt-1">Write in any language — English, தமிழ், हिन्दी, తెలుగు, മലയാളം, ಕನ್ನಡ, or mixed (e.g. Tanglish). Your original words are kept exactly as written.</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
-                <select required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" value={form.category} onChange={e => setForm({...form, category: e.target.value})}>
-                  <option value="">Select Category</option>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <select className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" value={form.category} onChange={e => setForm({...form, category: e.target.value})}>
+                  <option value="">Not sure — let AI identify</option>
                   {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Severity *</label>
-                <select required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" value={form.reported_severity} onChange={e => setForm({...form, reported_severity: e.target.value})}>
-                  <option value="">Select Severity</option>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Severity</label>
+                <select className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" value={form.reported_severity} onChange={e => setForm({...form, reported_severity: e.target.value})}>
+                  <option value="">Not sure — let AI assess</option>
                   {SEVERITIES.map(s => <option key={s.value} value={s.value}>{s.label} — {s.desc}</option>)}
                 </select>
               </div>

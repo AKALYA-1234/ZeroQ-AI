@@ -7,6 +7,9 @@ import {
   ArrowRight, Layers, GitBranch, Wrench, X, Send, ChevronDown
 } from 'lucide-react'
 import api from '../../services/api'
+import { useLiveEvents } from '../../hooks/useLiveEvents'
+import IncidentVerificationPanel from '../../components/intelligence/IncidentVerificationPanel'
+import { SourceBadge } from '../../components/intelligence/ui'
 
 const SEVERITY_STYLES = { critical: 'bg-red-100 text-red-700 border-red-200', high: 'bg-orange-100 text-orange-700 border-orange-200', medium: 'bg-amber-100 text-amber-700 border-amber-200', low: 'bg-green-100 text-green-700 border-green-200' }
 const STATUS_STYLES = { submitted: 'bg-blue-100 text-blue-700', under_review: 'bg-amber-100 text-amber-700', investigating: 'bg-purple-100 text-purple-700', resolved: 'bg-green-100 text-green-700', rejected: 'bg-gray-100 text-gray-600' }
@@ -38,6 +41,8 @@ export default function ComplaintManagement() {
   const [updateSuccess, setUpdateSuccess] = useState('')
 
   useEffect(() => { fetchComplaints(); fetchFilters() }, [page, filters, showAllRecords])
+  // Live queue: new submissions, finished AI analyses and resolutions refresh the list.
+  useLiveEvents(() => { fetchComplaints() }, ['complaint.created', 'analysis.completed', 'complaint.resolved', 'complaint.updated'])
 
   const fetchComplaints = async () => {
     try {
@@ -132,6 +137,7 @@ export default function ComplaintManagement() {
 
   const tabs = [
     { id: 'overview', label: 'Overview & Evidence' },
+    { id: 'ai', label: 'AI Verification & Resolution' },
     { id: 'investigation', label: 'Investigation & Lab Notes' },
     { id: 'status', label: 'Status & Client Updates' },
     { id: 'audit', label: 'Audit Timeline' }
@@ -271,6 +277,13 @@ export default function ComplaintManagement() {
                   </div>
                   <div className="text-xs font-medium text-gray-800">{c.product_name || 'Unknown Product'}</div>
                   <div className="text-[10px] text-gray-500 mt-0.5">{c.category || 'N/A'}</div>
+                  {c.ai && (
+                    <div className="flex flex-wrap items-center gap-1 mt-1">
+                      <SourceBadge source={c.ai.source} />
+                      {c.ai.language && c.ai.language !== 'English' && <span className="text-[10px] text-gray-500">{c.ai.language}</span>}
+                      {c.ai.low_confidence && <span className="text-[10px] font-semibold text-amber-700">verify</span>}
+                    </div>
+                  )}
                   <div className="flex items-center justify-between mt-1.5">
                     <span className="text-[10px] text-gray-400">
                       {c.submitted_date ? new Date(c.submitted_date).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
@@ -344,12 +357,12 @@ export default function ComplaintManagement() {
 
               {/* Tabs */}
               <div className="border-b border-gray-100 px-4">
-                <div className="flex gap-0">
+                <div className="flex gap-0 overflow-x-auto">
                   {tabs.map(tab => (
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
-                      className={`px-3 py-2.5 text-xs font-medium border-b-2 transition-colors ${
+                      className={`px-3 py-2.5 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${
                         activeTab === tab.id ? 'border-teal-600 text-teal-700' : 'border-transparent text-gray-500 hover:text-gray-700'
                       }`}
                     >{tab.label}</button>
@@ -358,9 +371,11 @@ export default function ComplaintManagement() {
               </div>
 
               {/* Tab Content */}
-              <div className="p-4 overflow-y-auto max-h-[480px]">
+              <div className={`p-4 overflow-y-auto ${activeTab === 'ai' ? 'max-h-[75vh]' : 'max-h-[480px]'}`}>
                 {detailLoading ? (
                   <div className="py-8 text-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600 mx-auto"></div></div>
+                ) : activeTab === 'ai' ? (
+                  <IncidentVerificationPanel complaintId={detail.complaint_id} onResolved={() => { fetchComplaints(); selectComplaint(detail) }} />
                 ) : activeTab === 'overview' ? (
                   <div className="space-y-4">
                     {/* Customer & Production Batch */}

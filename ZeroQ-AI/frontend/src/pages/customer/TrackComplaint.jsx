@@ -2,6 +2,8 @@ import React, { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Search, FileText, Clock, CheckCircle, AlertCircle, ArrowRight, Info } from 'lucide-react'
 import api from '../../services/api'
+import { useLiveEvents, useLiveStatus } from '../../hooks/useLiveEvents'
+import { AIUnderstandingCard, ResolutionCard, FeedbackCard, ResolutionTimeline } from '../../components/intelligence/CustomerResolution'
 
 const STATUS_STEPS = ['Submitted', 'Under Review', 'Investigating', 'Resolved']
 const STATUS_MAP = {
@@ -20,22 +22,42 @@ export default function TrackComplaint() {
   const [complaint, setComplaint] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [timeline, setTimeline] = useState([])
+  const [liveNote, setLiveNote] = useState('')
+  const liveStatus = useLiveStatus()
 
   React.useEffect(() => { if (paramId) handleSearch(paramId) }, [paramId])
 
-  const handleSearch = async (id) => {
-    const cid = id || searchId
-    if (!cid) return
-    setLoading(true)
-    setError('')
+  const fetchComplaint = async (cid, { quiet = false } = {}) => {
+    if (!quiet) { setLoading(true); setError('') }
     try {
-      const res = await api.get(`/api/complaints/${cid}`)
-      setComplaint(res.data)
+      const [res, tl] = await Promise.all([
+        api.get(`/api/complaints/${cid}`),
+        api.get(`/api/complaints/${cid}/timeline`).catch(() => ({ data: { history: [] } })),
+      ])
+      // Ignore stale responses: keep the newer version if one already arrived.
+      setComplaint(prev => (prev && prev.complaint_id === res.data.complaint_id && prev.version && res.data.version && prev.version > res.data.version) ? prev : res.data)
+      setTimeline(tl.data.history || [])
     } catch (err) {
-      setError('Complaint not found. Please check the ID and try again.')
-      setComplaint(null)
-    } finally { setLoading(false) }
+      if (!quiet) { setError('Complaint not found. Please check the ID and try again.'); setComplaint(null) }
+    } finally { if (!quiet) setLoading(false) }
   }
+
+  const handleSearch = (id) => {
+    const cid = (id || searchId).trim()
+    if (cid) fetchComplaint(cid)
+  }
+
+  // Real-time: admin resolutions / status changes / AI analysis update this page without a refresh.
+  useLiveEvents(ev => {
+    if (!complaint) return
+    if (ev.type === 'connection.resync' || ev.payload?.complaint_id === complaint.complaint_id) {
+      fetchComplaint(complaint.complaint_id, { quiet: true })
+      if (ev.type === 'complaint.resolved') setLiveNote('Your complaint was just resolved.')
+      else if (ev.type === 'complaint.updated') setLiveNote('Status updated just now.')
+      else if (ev.type === 'analysis.completed') setLiveNote('AI analysis is ready.')
+    }
+  }, ['complaint.resolved', 'complaint.updated', 'analysis.completed'])
 
   const currentStep = complaint ? (STATUS_MAP[complaint.status] ?? 0) : 0
 
@@ -61,6 +83,13 @@ export default function TrackComplaint() {
 
       {complaint && (
         <div className="space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-2 -mb-2">
+            <p className="text-xs text-gray-500 flex items-center gap-1.5">
+              <span className={`w-2 h-2 rounded-full ${liveStatus === 'live' ? 'bg-emerald-500' : 'bg-gray-300'}`} aria-hidden="true" />
+              {liveStatus === 'live' ? 'Live — updates appear automatically' : liveStatus === 'offline' ? 'Reconnecting for live updates…' : 'Connecting for live updates…'}
+            </p>
+            <p className="text-xs font-medium text-teal-700" role="status" aria-live="polite">{liveNote}</p>
+          </div>
           {/* Progress */}
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h3 className="text-sm font-bold text-gray-900 mb-4">Complaint Progress</h3>
@@ -82,22 +111,30 @@ export default function TrackComplaint() {
           {/* Details */}
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h3 className="text-sm font-bold text-gray-900 mb-4">Complaint Details</h3>
-            <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
               <div><span className="text-gray-500 text-xs">Complaint ID</span><p className="font-mono font-bold text-teal-700">{complaint.complaint_id}</p></div>
               <div><span className="text-gray-500 text-xs">Status</span><p className="font-medium text-gray-900 capitalize">{complaint.status?.replace(/_/g, ' ')}</p></div>
               <div><span className="text-gray-500 text-xs">Category</span><p className="text-gray-800">{complaint.category || 'N/A'}</p></div>
               <div><span className="text-gray-500 text-xs">Severity</span><p className="text-gray-800 capitalize">{complaint.reported_severity || 'N/A'}</p></div>
-              <div className="col-span-2"><span className="text-gray-500 text-xs">Title</span><p className="text-gray-800 font-medium">{complaint.title || 'N/A'}</p></div>
+              <div className="sm:col-span-2"><span className="text-gray-500 text-xs">Title</span><p className="text-gray-800 font-medium">{complaint.title || 'N/A'}</p></div>
               <div><span className="text-gray-500 text-xs">Submitted</span><p className="text-gray-800">{complaint.submitted_date ? new Date(complaint.submitted_date).toLocaleDateString() : '—'}</p></div>
               <div><span className="text-gray-500 text-xs">Last Updated</span><p className="text-gray-800">{complaint.last_updated ? new Date(complaint.last_updated).toLocaleDateString() : '—'}</p></div>
             </div>
-            {complaint.customer_visible_update && (
+            {complaint.customer_visible_update && !complaint.resolution && (
               <div className="mt-4 pt-4 border-t border-gray-100">
                 <span className="text-gray-500 text-xs">Latest Update</span>
                 <p className="text-sm text-gray-800 mt-1">{complaint.customer_visible_update}</p>
               </div>
             )}
           </div>
+
+          {complaint.status === 'resolved' && complaint.resolution && <ResolutionCard resolution={complaint.resolution} />}
+          {complaint.status === 'resolved' && complaint.resolution && (
+            <FeedbackCard complaintId={complaint.complaint_id} feedback={complaint.feedback}
+              onSaved={() => fetchComplaint(complaint.complaint_id, { quiet: true })} />
+          )}
+          <AIUnderstandingCard ai={complaint.ai_understanding} resolved={complaint.status === 'resolved'} />
+          <ResolutionTimeline history={timeline} />
         </div>
       )}
 

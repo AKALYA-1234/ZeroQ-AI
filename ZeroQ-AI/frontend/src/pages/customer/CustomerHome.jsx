@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { complaintService } from '../../services/complaintService'
+import { useLiveEvents } from '../../hooks/useLiveEvents'
 import {
   FileText, Search, CheckCircle, Clock, AlertCircle,
   ArrowRight, Mail, Phone, Plus, Eye, Loader2,
@@ -40,6 +41,10 @@ export default function CustomerHome() {
   const [loading, setLoading] = useState(true)
   const [trackId, setTrackId] = useState('')
 
+  const [refreshKey, setRefreshKey] = useState(0)
+  // Live: resolutions and status changes on the customer's complaints refresh the dashboard.
+  useLiveEvents(() => setRefreshKey(k => k + 1), ['complaint.resolved', 'complaint.updated', 'analysis.completed'])
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -56,7 +61,7 @@ export default function CustomerHome() {
       }
     }
     fetchData()
-  }, [])
+  }, [refreshKey])
 
   const firstName = user?.full_name ? user.full_name.split(' ')[0] : 'Customer'
 

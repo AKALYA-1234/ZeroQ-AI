@@ -16,6 +16,8 @@ from app.ml.model_service import (
     get_feature_importance, get_model_error, MODEL_VERSION,
 )
 from app.schemas.complaint import ComplaintStatusUpdate
+from app.intelligence.realtime import broker, complaint_event_payload
+from app.models.intelligence import IssueAnalysis
 
 router = APIRouter()
 
@@ -286,8 +288,24 @@ def list_all_complaints(
     order_func = desc if sort_order == "desc" else asc
     complaints = query.order_by(order_func(sort_col)).offset((page - 1) * per_page).limit(per_page).all()
 
+    # One extra query (not N+1) to attach the AI prediction badge for the page.
+    analyses = {
+        a.complaint_id: a for a in db.query(IssueAnalysis)
+        .filter(IssueAnalysis.complaint_id.in_([c.id for c in complaints])).all()
+    } if complaints else {}
+    items = []
+    for c in complaints:
+        row = _complaint_summary(c)
+        a = analyses.get(c.id)
+        row["ai"] = {
+            "source": a.prediction_source, "category": a.predicted_category,
+            "confidence": a.confidence, "low_confidence": a.is_low_confidence,
+            "language": a.language_name,
+        } if a else None
+        items.append(row)
+
     return {
-        "items": [_complaint_summary(c) for c in complaints],
+        "items": items,
         "total": total,
         "page": page,
         "per_page": per_page,
@@ -470,6 +488,10 @@ def update_complaint(
     _create_audit_log(db, current_user, "update_complaint", "complaint", complaint_id, changes)
 
     db.commit()
+    db.refresh(complaint)
+    broker.publish("complaint.updated", complaint_event_payload(complaint, {
+        "customer_visible_update": complaint.customer_visible_update if update_data.is_customer_visible else None}),
+        user_ids=[complaint.submitted_by_user_id], to_admins=True)
     return {"message": "Complaint updated successfully", "complaint_id": complaint_id}
 
 
