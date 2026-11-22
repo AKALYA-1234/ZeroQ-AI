@@ -1,0 +1,26 @@
+- generic [ref=e4]:
+  - generic [ref=e5]:
+    - heading "ZeroQ AI" [level=1] [ref=e9]
+    - paragraph [ref=e10]: Manufacturing Quality Intelligence Platform
+  - generic [ref=e11]:
+    - heading "Welcome back" [level=2] [ref=e12]
+    - paragraph [ref=e13]: Sign in to your account to continue
+    - generic [ref=e14]:
+      - generic [ref=e15]:
+        - generic [ref=e16]: Email Address
+        - textbox "you@example.com" [ref=e17]
+      - generic [ref=e18]:
+        - generic [ref=e19]: Password
+        - generic [ref=e20]:
+          - textbox "••••••••" [ref=e21]
+          - button [ref=e22] [cursor=pointer]
+      - button "Sign In" [ref=e26] [cursor=pointer]
+    - paragraph [ref=e29]:
+      - text: Don't have an account?
+      - link "Create one" [ref=e30] [cursor=pointer]:
+        - /url: /register
+    - generic [ref=e31]:
+      - paragraph [ref=e32]: Demo Credentials
+      - generic [ref=e33]:
+        - paragraph [ref=e34]: "Customer: demo@customer.com / DemoCustomer2024!"
+        - paragraph [ref=e35]: "Admin: admin@zeroq.com / AdminZeroQ2024!"

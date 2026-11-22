@@ -283,7 +283,7 @@ export default function ComplaintManagement() {
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs font-mono font-bold text-teal-700">{c.complaint_id}</span>
                     <div className="flex items-center gap-1">
-                      <Badge className={SEVERITY_STYLES[c.reported_severity] || 'bg-gray-100 text-gray-600'}>{c.reported_severity?.toUpperCase()}</Badge>
+                      <Badge className={SEVERITY_STYLES[c.reported_severity] || 'bg-gray-100 text-gray-600'}>{c.reported_severity ? c.reported_severity.toUpperCase() : 'NOT REPORTED'}</Badge>
                       <Badge className={STATUS_STYLES[c.status] || 'bg-gray-100 text-gray-600'}>{c.status?.replace(/_/g, ' ')}</Badge>
                     </div>
                   </div>
@@ -351,7 +351,7 @@ export default function ComplaintManagement() {
                       {detail.record_type === 'customer_submitted' ? 'Customer Submitted' : 'Historical'}
                     </Badge>
                     <Badge className={SEVERITY_STYLES[detail.reported_severity] || 'bg-gray-100 text-gray-600'}>
-                      {detail.reported_severity?.toUpperCase()} SEVERITY
+                      {detail.reported_severity ? `${detail.reported_severity.toUpperCase()} SEVERITY` : 'SEVERITY NOT REPORTED'}
                     </Badge>
                   </div>
                 </div>

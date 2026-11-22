@@ -1,0 +1,224 @@
+- generic [ref=f1e3]:
+  - complementary [ref=f1e4]:
+    - generic [ref=f1e10]:
+      - generic [ref=f1e11]: ZeroQ AI
+      - generic [ref=f1e12]: Quality Intelligence
+    - navigation [ref=f1e13]:
+      - link "Executive Dashboard" [ref=f1e14] [cursor=pointer]:
+        - /url: /admin/dashboard
+      - link "Complaint Management" [ref=f1e21] [cursor=pointer]:
+        - /url: /admin/complaints
+      - link "Complaint Analytics" [ref=f1e26] [cursor=pointer]:
+        - /url: /admin/analytics
+      - link "AI Root Cause Analysis" [ref=f1e29] [cursor=pointer]:
+        - /url: /admin/root-cause-analysis
+      - link "Risk Assessment" [ref=f1e35] [cursor=pointer]:
+        - /url: /admin/risk-assessment
+      - link "AI Prediction Center" [ref=f1e39] [cursor=pointer]:
+        - /url: /admin/ai-prediction
+      - link "AI Insights & Impact" [ref=f1e51] [cursor=pointer]:
+        - /url: /admin/ai-insights
+      - link "Model Monitoring" [ref=f1e55] [cursor=pointer]:
+        - /url: /admin/ai-monitoring
+      - link "CAPA Management" [ref=f1e59] [cursor=pointer]:
+        - /url: /admin/capa
+    - generic [ref=f1e64]:
+      - generic [ref=f1e65]: Q
+      - generic [ref=f1e66]:
+        - generic [ref=f1e67]: Quality Admin
+        - generic [ref=f1e68]: Administrator
+      - button "Sign Out" [ref=f1e69] [cursor=pointer]
+  - main [ref=f1e73]:
+    - generic [ref=f1e75]:
+      - navigation [ref=f1e77]:
+        - generic [ref=f1e81] [cursor=pointer]: Executive Dashboard
+        - generic [ref=f1e84]: Complaint Management
+      - generic [ref=f1e85]:
+        - textbox "Search complaints, root causes, lots..." [ref=f1e90]
+        - generic [ref=f1e91]:
+          - generic [ref=f1e92]: UTC 15:38
+          - generic [ref=f1e93]: Live
+        - button [ref=f1e95] [cursor=pointer]
+        - generic [ref=f1e100]:
+          - generic [ref=f1e101]: Q
+          - generic [ref=f1e102]:
+            - generic [ref=f1e103]: Admin Console
+            - generic [ref=f1e104]: Plant Operations
+    - generic [ref=f1e106]:
+      - generic [ref=f1e107]:
+        - generic [ref=f1e108]:
+          - generic [ref=f1e109]:
+            - heading "Complaint Management" [level=1] [ref=f1e110]
+            - generic [ref=f1e111]: ACTIVE QUEUE
+          - paragraph [ref=f1e112]: Review, investigate, and manage customer quality complaints across multi-site manufacturing facilities with end-to-end audit traceability.
+        - generic [ref=f1e113]:
+          - button "Export Dossier (CSV/PDF)" [ref=f1e114] [cursor=pointer]
+          - button "Register Complaint (Manual Entry)" [ref=f1e120] [cursor=pointer]
+      - generic [ref=f1e122]:
+        - generic [ref=f1e123]:
+          - generic [ref=f1e124]: Total Complaints
+          - generic [ref=f1e125]: "1"
+          - generic [ref=f1e126]: Historical synthetic + active cases
+        - generic [ref=f1e127]:
+          - generic [ref=f1e128]: New / Submitted
+          - generic [ref=f1e129]: "1"
+          - generic [ref=f1e130]: Awaiting initial triage & routing
+        - generic [ref=f1e131]:
+          - generic [ref=f1e132]: Under Review
+          - generic [ref=f1e133]: "0"
+          - generic [ref=f1e134]: Assigned to plant QA
+        - generic [ref=f1e135]:
+          - generic [ref=f1e136]: Investigation Active
+          - generic [ref=f1e137]: "0"
+          - generic [ref=f1e138]: Shop floor & lab testing
+        - generic [ref=f1e139]:
+          - generic [ref=f1e140]: Resolved / Closed
+          - generic [ref=f1e141]: "0"
+          - generic [ref=f1e142]: Root cause closure
+      - generic [ref=f1e143]:
+        - generic [ref=f1e149]:
+          - strong [ref=f1e150]: "Dual Data Topology Active:"
+          - text: Currently distinguishing historical records from newly submitted customer intake cases.
+        - generic [ref=f1e151]:
+          - button "Show All" [ref=f1e152] [cursor=pointer]
+          - button "Only New Active" [ref=f1e153] [cursor=pointer]
+      - generic [ref=f1e154]:
+        - generic [ref=f1e155]:
+          - textbox "Search Complaint ID, Product..." [ref=f1e160]: CMP006002
+          - combobox [ref=f1e161]:
+            - option "All Statuses" [selected]
+            - option "Submitted"
+            - option "Under Review"
+            - option "Investigating"
+            - option "Resolved"
+          - combobox [ref=f1e162]:
+            - option "All Categories" [selected]
+            - option "Foreign Matter / Contamination"
+            - option "Infestation"
+            - option "Other Customer Concern"
+            - option "Packaging Defect"
+            - option "Physical Defect"
+            - option "Process-related Defect"
+            - option "Sensory Defect"
+            - option "Weight / Quantity"
+          - combobox [ref=f1e163]:
+            - option "All Severities" [selected]
+            - option "Critical"
+            - option "High"
+            - option "Medium"
+            - option "Low"
+          - button "Apply" [ref=f1e164] [cursor=pointer]
+        - generic [ref=f1e167]:
+          - generic [ref=f1e539]:
+            - text: "Search: CMP006002"
+            - img [ref=f1e540] [cursor=pointer]
+          - generic [ref=f1e168]: Showing 1 of 1 complaints
+      - generic [ref=f1e169]:
+        - generic [ref=f1e170]:
+          - generic [ref=f1e171]:
+            - generic [ref=f1e172]:
+              - generic [ref=f1e173]:
+                - heading "Complaint Queue" [level=3] [ref=f1e174]
+                - generic [ref=f1e175]: 1 Items
+              - generic [ref=f1e176]: "Sorted: Newest"
+            - textbox "Quick filter ID, product, category..." [ref=f1e181]
+          - generic [ref=f1e567] [cursor=pointer]:
+            - generic [ref=f1e568]:
+              - generic [ref=f1e569]: CMP006002
+              - generic [ref=f1e570]:
+                - generic [ref=f1e571]: NOT REPORTED
+                - generic [ref=f1e572]: submitted
+            - generic [ref=f1e573]: Salted Snacks
+            - generic [ref=f1e574]: Sensory Defect
+            - generic "Submitted by a test account — excluded from real-world metrics and training" [ref=f1e575]: TEST
+            - generic "Trained issue classifier, supported by historical incidents" [ref=f1e577]: ML prediction
+            - generic [ref=f1e588]:
+              - generic [ref=f1e589]: Nov 22, 2026
+              - generic [ref=f1e590]: Customer Submitted
+          - generic [ref=f1e185]:
+            - generic [ref=f1e186]: Showing 1-1 of 1
+            - generic [ref=f1e187]:
+              - button [disabled] [ref=f1e188]
+              - generic [ref=f1e191]: "1"
+              - button [disabled] [ref=f1e192]
+        - generic [ref=f1e195]:
+          - generic [ref=f1e196]:
+            - generic [ref=f1e448]:
+              - generic [ref=f1e449]: CMP006002
+              - generic [ref=f1e450]: Customer Submitted
+              - generic [ref=f1e451]: SEVERITY NOT REPORTED
+            - generic [ref=f1e452]: Logged 11/22/2026, 10:00:19 AM
+            - generic [ref=f1e457]:
+              - generic [ref=f1e458]:
+                - generic [ref=f1e459]: Customer-Reported
+                - text: N/A
+              - generic [ref=f1e460]:
+                - generic [ref=f1e461]: Admin Assessed
+                - text: Pending Assessment
+          - generic [ref=f1e463]:
+            - button "Overview & Evidence" [ref=f1e464] [cursor=pointer]
+            - button "AI Verification & Resolution" [ref=f1e465] [cursor=pointer]
+            - button "Investigation & Lab Notes" [ref=f1e466] [cursor=pointer]
+            - button "Status & Client Updates" [ref=f1e467] [cursor=pointer]
+            - button "Audit Timeline" [ref=f1e468] [cursor=pointer]
+          - generic [ref=f1e470]:
+            - generic [ref=f1e471]:
+              - generic [ref=f1e591]:
+                - heading "Customer Account & Production Batch" [level=4] [ref=f1e592]
+                - generic [ref=f1e593]: Verified Enterprise Client
+              - generic [ref=f1e597]:
+                - generic [ref=f1e598]:
+                  - generic [ref=f1e599]: Reporting Client
+                  - generic [ref=f1e600]: Sarah Jenkins
+                  - generic [ref=f1e601]: demo@customer.com
+                - generic [ref=f1e602]:
+                  - generic [ref=f1e603]: Target Production Batch
+                  - generic [ref=f1e604]: N/A
+              - generic [ref=f1e605]:
+                - generic [ref=f1e606]:
+                  - generic [ref=f1e607]: Incident Date
+                  - generic [ref=f1e608]: 11/22/2026
+                - generic [ref=f1e609]:
+                  - generic [ref=f1e610]: Intake Date
+                  - generic [ref=f1e611]: 11/22/2026
+                - generic [ref=f1e612]:
+                  - generic [ref=f1e613]: Product
+                  - generic [ref=f1e614]: N/A
+            - generic [ref=f1e615]:
+              - heading "Quality Triage & Workflow Transition" [level=4] [ref=f1e620]
+              - generic [ref=f1e621]:
+                - generic [ref=f1e622]:
+                  - generic [ref=f1e623]: Workflow Stage
+                  - combobox [ref=f1e624]:
+                    - option "1. Submitted (Pending Review)" [selected]
+                    - option "2. Under Review (QA Triage)"
+                    - option "3. Investigating (Lab & Shop Floor)"
+                    - option "4. CAPA Initiated"
+                    - option "5. Resolved (Action Completed)"
+                - generic [ref=f1e625]:
+                  - generic [ref=f1e626]: Admin Assessed Severity
+                  - combobox [ref=f1e627]:
+                    - option "Low Severity"
+                    - option "Medium Severity" [selected]
+                    - option "High Severity"
+                    - option "Critical Severity"
+              - generic [ref=f1e628]:
+                - generic [ref=f1e629]: Customer-Visible Status Update (Surfaced to Client Tracking Portal)
+                - textbox "e.g., Retain samples inspected; QA team verifying sealing temperature logs." [ref=f1e630]
+              - generic [ref=f1e631]:
+                - generic [ref=f1e632]: Internal QA Triage Notes (Audit Trail Only)
+                - textbox "Internal technical notes, lab sample numbers, or root cause hypothesis..." [ref=f1e633]
+              - button "Apply Status & Notify Customer" [ref=f1e635] [cursor=pointer]
+            - generic [ref=f1e639]:
+              - generic [ref=f1e640]:
+                - heading "Verbatim Customer Incident Narrative" [level=4] [ref=f1e641]
+                - generic [ref=f1e642]: Portal Direct Intake
+              - heading "\"Packets leaking and snacks soggy\"" [level=5] [ref=f1e643]
+              - paragraph [ref=f1e644]: I bought 3 packets of Salted Snacks from batch BAT000123. Two packets were torn at the side seal and the snacks inside were soft and soggy, with a stale smell. Please call me on 9876543210 or mail me at test.user@example.com.
+            - generic [ref=f1e645]:
+              - button "Start Lab Investigation" [ref=f1e646] [cursor=pointer]
+              - button "Link CAPA Ticket" [ref=f1e651] [cursor=pointer]
+              - button "Export Dossier" [ref=f1e654] [cursor=pointer]
+    - generic [ref=f1e204]:
+      - generic [ref=f1e205]: © 2025 ZeroQ AI Technologies Inc. All rights reserved. • Enterprise Manufacturing Intelligence
+      - generic [ref=f1e206]: Demo Environment • Synthetic Quality Dataset Active

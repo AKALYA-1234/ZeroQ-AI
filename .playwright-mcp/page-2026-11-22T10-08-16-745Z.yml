@@ -1,0 +1,403 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e36]:
+    - complementary [ref=e37]:
+      - generic [ref=e43]:
+        - generic [ref=e44]: ZeroQ AI
+        - generic [ref=e45]: Quality Intelligence
+      - navigation [ref=e46]:
+        - link "Executive Dashboard" [ref=e47] [cursor=pointer]:
+          - /url: /admin/dashboard
+        - link "Complaint Management" [ref=e54] [cursor=pointer]:
+          - /url: /admin/complaints
+        - link "Complaint Analytics" [ref=e59] [cursor=pointer]:
+          - /url: /admin/analytics
+        - link "AI Root Cause Analysis" [ref=e62] [cursor=pointer]:
+          - /url: /admin/root-cause-analysis
+        - link "Risk Assessment" [ref=e68] [cursor=pointer]:
+          - /url: /admin/risk-assessment
+        - link "AI Prediction Center" [ref=e72] [cursor=pointer]:
+          - /url: /admin/ai-prediction
+        - link "AI Insights & Impact" [ref=e84] [cursor=pointer]:
+          - /url: /admin/ai-insights
+        - link "Model Monitoring" [ref=e88] [cursor=pointer]:
+          - /url: /admin/ai-monitoring
+        - link "CAPA Management" [ref=e92] [cursor=pointer]:
+          - /url: /admin/capa
+      - generic [ref=e97]:
+        - generic [ref=e98]: Q
+        - generic [ref=e99]:
+          - generic [ref=e100]: Quality Admin
+          - generic [ref=e101]: Administrator
+        - button "Sign Out" [ref=e102] [cursor=pointer]
+    - main [ref=e106]:
+      - generic [ref=e108]:
+        - navigation [ref=e110]:
+          - generic [ref=e114] [cursor=pointer]: Executive Dashboard
+          - generic [ref=e117]: Executive Dashboard
+        - generic [ref=e118]:
+          - textbox "Search complaints, root causes, lots..." [ref=e123]
+          - generic [ref=e124]:
+            - generic [ref=e125]: UTC 15:38
+            - generic [ref=e126]: Live
+          - button [ref=e128] [cursor=pointer]
+          - generic [ref=e133]:
+            - generic [ref=e134]: Q
+            - generic [ref=e135]:
+              - generic [ref=e136]: Admin Console
+              - generic [ref=e137]: Plant Operations
+      - generic [ref=e139]:
+        - generic [ref=e140]:
+          - generic [ref=e141]:
+            - heading "Executive Dashboard" [level=1] [ref=e142]
+            - paragraph [ref=e143]: Monitor manufacturing quality, customer complaints, and AI-based performance across production operations from real 19-year dataset (2008-2026).
+          - button "Export Report (PDF/CSV)" [ref=e145] [cursor=pointer]
+        - generic [ref=e149]:
+          - combobox [ref=e153]:
+            - option "All Year 2008-26" [selected]
+            - option "2008"
+            - option "2009"
+            - option "2010"
+            - option "2011"
+            - option "2012"
+            - option "2013"
+            - option "2014"
+            - option "2015"
+            - option "2016"
+            - option "2017"
+            - option "2018"
+            - option "2019"
+            - option "2020"
+            - option "2021"
+            - option "2022"
+            - option "2023"
+            - option "2024"
+            - option "2025"
+            - option "2026"
+          - combobox [ref=e154]:
+            - option "All Products" [selected]
+            - option "Breakfast Cereal"
+            - option "Chocolate Bar"
+            - option "Chocolate Wafer"
+            - option "Classic Biscuits"
+            - option "Cooking Oil"
+            - option "Corn Flakes"
+            - option "Cream Biscuits"
+            - option "Fruit Drink"
+            - option "Instant Noodles"
+            - option "Instant Soup"
+            - option "Mango Beverage"
+            - option "Mayonnaise"
+            - option "Peanut Butter"
+            - option "Potato Crisps"
+            - option "Rice Flour"
+            - option "Salted Snacks"
+            - option "Spicy Snack Mix"
+            - option "Sunflower Oil"
+            - option "Tomato Ketchup"
+            - option "Wheat Flour"
+          - combobox [ref=e155]:
+            - option "All Categories" [selected]
+            - option "Foreign Matter / Contamination"
+            - option "Infestation"
+            - option "Other Customer Concern"
+            - option "Packaging Defect"
+            - option "Physical Defect"
+            - option "Process-related Defect"
+            - option "Sensory Defect"
+            - option "Weight / Quantity"
+          - combobox [ref=e156]:
+            - option "All Facilities" [selected]
+            - option "Bengaluru Manufacturing Unit"
+            - option "Chennai Manufacturing Unit"
+            - option "Coimbatore Manufacturing Unit"
+            - option "Hyderabad Manufacturing Unit"
+            - option "Pune Manufacturing Unit"
+          - generic [ref=e157]:
+            - generic [ref=e158]: DATASET COVERAGE
+            - generic [ref=e159]: Full • 2078
+        - generic [ref=e160]:
+          - generic [ref=e161]:
+            - generic [ref=e162]: Total Complaints
+            - generic [ref=e163]: 6,002
+            - generic [ref=e164]: Includes synthetic historical records (2008-2026)
+          - generic [ref=e165]:
+            - generic [ref=e166]: Open Complaints
+            - generic [ref=e167]:
+              - generic [ref=e168]: "1323"
+              - generic [ref=e169]: Active Cases
+            - generic [ref=e170]: "Active Ratio: 22.04% open"
+          - generic [ref=e171]:
+            - generic [ref=e172]: Resolved Complaints
+            - generic [ref=e173]: 4,679
+            - generic [ref=e177]: 78.0% resolution rate
+          - generic [ref=e178]:
+            - generic [ref=e179]: High-Risk Products
+            - generic [ref=e180]: Model Validation Pending
+            - generic [ref=e181]: Risk model not yet validated
+          - generic [ref=e185]:
+            - generic [ref=e186]: Recurring Complaints
+            - generic [ref=e187]:
+              - generic [ref=e188]: "8"
+              - generic [ref=e189]: Clusters
+            - generic [ref=e190]: Complaints with similar recurring patterns
+          - generic [ref=e191]:
+            - generic [ref=e192]: Complaint Reduction
+            - generic [ref=e193]: Not Yet Calculated
+            - generic [ref=e194]: Insufficient data for trend comparison
+        - generic [ref=e195]:
+          - generic [ref=e196]:
+            - generic [ref=e198]:
+              - heading "Customer Complaint Trend (2008–2026)" [level=3] [ref=e199]
+              - paragraph [ref=e200]: Manufacturing quality complaint volume over time, sourced from historical dataset
+            - img [ref=e203]:
+              - generic [ref=e208]:
+                - generic [ref=e209]: "2009"
+                - generic [ref=e211]: "2012"
+                - generic [ref=e213]: "2015"
+                - generic [ref=e215]: "2018"
+                - generic [ref=e217]: "2021"
+                - generic [ref=e219]: "2024"
+                - generic [ref=e221]: "2027"
+              - generic [ref=e224]:
+                - generic [ref=e225]: "0"
+                - generic [ref=e227]: "90"
+                - generic [ref=e229]: "180"
+                - generic [ref=e231]: "270"
+                - generic [ref=e233]: "360"
+            - generic [ref=e239]:
+              - generic [ref=e240]: Complaint Volume
+              - generic [ref=e242]: "Source: Synthetic Manufacturing Dataset"
+          - generic [ref=e243]:
+            - generic [ref=e245]:
+              - heading "Monthly Complaint Distribution" [level=3] [ref=e246]
+              - paragraph [ref=e247]: Aggregated complaint counts across all years, by calendar month
+            - img [ref=e250]:
+              - generic [ref=e255]:
+                - generic [ref=e256]: Feb
+                - generic [ref=e258]: Apr
+                - generic [ref=e260]: Jun
+                - generic [ref=e262]: Aug
+                - generic [ref=e264]: Oct
+                - generic [ref=e266]: Dec
+              - generic [ref=e269]:
+                - generic [ref=e270]: "0"
+                - generic [ref=e272]: "150"
+                - generic [ref=e274]: "300"
+                - generic [ref=e276]: "450"
+                - generic [ref=e278]: "600"
+            - generic [ref=e306]: Covers all product lines across all facilities
+        - generic [ref=e308]:
+          - generic [ref=e309]:
+            - generic [ref=e310]:
+              - heading "Complaints by Product Line" [level=3] [ref=e311]
+              - paragraph [ref=e312]: 6,002 complaints across all products
+            - generic [ref=e313]:
+              - generic [ref=e314]:
+                - generic [ref=e315]: Rice Flour
+                - generic [ref=e318]: "341"
+              - generic [ref=e319]:
+                - generic [ref=e320]: Corn Flakes
+                - generic [ref=e323]: "334"
+              - generic [ref=e324]:
+                - generic [ref=e325]: Wheat Flour
+                - generic [ref=e328]: "324"
+              - generic [ref=e329]:
+                - generic [ref=e330]: Instant Soup
+                - generic [ref=e333]: "323"
+              - generic [ref=e334]:
+                - generic [ref=e335]: Fruit Drink
+                - generic [ref=e338]: "321"
+              - generic [ref=e339]:
+                - generic [ref=e340]: Peanut Butter
+                - generic [ref=e343]: "315"
+              - generic [ref=e344]:
+                - generic [ref=e345]: Classic Biscuits
+                - generic [ref=e348]: "310"
+              - generic [ref=e349]:
+                - generic [ref=e350]: Tomato Ketchup
+                - generic [ref=e353]: "304"
+            - paragraph [ref=e354]: + 2 additional products not shown for clarity
+          - generic [ref=e355]:
+            - generic [ref=e356]:
+              - heading "Complaint Category Breakdown" [level=3] [ref=e357]
+              - paragraph [ref=e358]: Manufacturing complaint categories by frequency
+            - generic [ref=e381]:
+              - generic [ref=e382]:
+                - generic [ref=e384]: Packaging Defect
+                - generic [ref=e385]: "1739"
+              - generic [ref=e386]:
+                - generic [ref=e388]: Sensory Defect
+                - generic [ref=e389]: "803"
+              - generic [ref=e390]:
+                - generic [ref=e392]: Physical Defect
+                - generic [ref=e393]: "799"
+              - generic [ref=e394]:
+                - generic [ref=e396]: Foreign Matter / Contamination
+                - generic [ref=e397]: "768"
+              - generic [ref=e398]:
+                - generic [ref=e400]: Weight / Quantity
+                - generic [ref=e401]: "696"
+              - generic [ref=e402]:
+                - generic [ref=e404]: Process-related Defect
+                - generic [ref=e405]: "504"
+              - generic [ref=e406]:
+                - generic [ref=e408]: Infestation
+                - generic [ref=e409]: "445"
+              - generic [ref=e410]:
+                - generic [ref=e412]: Other Customer Concern
+                - generic [ref=e413]: "248"
+        - generic [ref=e414]:
+          - generic [ref=e415]:
+            - generic [ref=e416]:
+              - heading "Top 5 Verified Root Causes" [level=3] [ref=e419]
+              - generic [ref=e420]: Investigation Data Pending
+            - generic [ref=e421]:
+              - generic [ref=e422]:
+                - generic [ref=e423]: Packaging Defect
+                - generic [ref=e424]: "1156"
+              - generic [ref=e429]:
+                - generic [ref=e430]: Sensory Defect
+                - generic [ref=e431]: "538"
+              - generic [ref=e436]:
+                - generic [ref=e437]: Physical Defect
+                - generic [ref=e438]: "521"
+              - generic [ref=e443]:
+                - generic [ref=e444]: Foreign Matter / Contamination
+                - generic [ref=e445]: "508"
+              - generic [ref=e450]:
+                - generic [ref=e451]: Weight / Quantity
+                - generic [ref=e452]: "481"
+          - generic [ref=e457]:
+            - generic [ref=e458]:
+              - heading "Product Risk Distribution" [level=3] [ref=e461]
+              - generic [ref=e462]: Risk Classification Pending
+            - generic [ref=e463]:
+              - generic [ref=e464]:
+                - generic [ref=e465]: critical
+                - generic [ref=e468]: 290 (5%)
+              - generic [ref=e469]:
+                - generic [ref=e470]: high
+                - generic [ref=e473]: 1361 (23%)
+              - generic [ref=e474]:
+                - generic [ref=e475]: low
+                - generic [ref=e478]: 1983 (33%)
+              - generic [ref=e479]:
+                - generic [ref=e480]: medium
+                - generic [ref=e483]: 2366 (39%)
+        - generic [ref=e484]:
+          - heading "Quality Insights" [level=3] [ref=e488]
+          - generic [ref=e489]:
+            - generic [ref=e490]:
+              - generic [ref=e491]: AI Observation
+              - paragraph [ref=e496]: Complaint volume has historically remained consistent across the synthetic baseline of ~69 complaints per year on average.
+            - generic [ref=e497]:
+              - generic [ref=e498]: Risk Indicator
+              - paragraph [ref=e502]: Packaging-related complaints dominate at ~31% of total volume. Focused inspection at packaging stations may reduce downstream customer impact.
+            - generic [ref=e503]:
+              - generic [ref=e504]: Manufacturing Month
+              - paragraph [ref=e509]: Monthly complaint distribution appears uniform across the calendar year in the synthetic dataset, suggesting no strong seasonal effect.
+        - generic [ref=e510]:
+          - generic [ref=e511]:
+            - generic [ref=e512]:
+              - heading "Recent Complaint Activity" [level=3] [ref=e513]
+              - generic [ref=e514]: Data Refresh
+            - paragraph [ref=e515]: Most recent complaints, spanning quality investigations and submissions
+          - table [ref=e517]:
+            - rowgroup [ref=e518]:
+              - row [ref=e519]:
+                - columnheader "Complaint ID" [ref=e520]
+                - columnheader "Product" [ref=e521]
+                - columnheader "Category" [ref=e522]
+                - columnheader "Facility" [ref=e523]
+                - columnheader "Severity" [ref=e524]
+                - columnheader "Status" [ref=e525]
+                - columnheader "Current Status" [ref=e526]
+            - rowgroup [ref=e527]:
+              - row [ref=e528]:
+                - cell "CMP002509" [ref=e529]
+                - cell "Rice Flour" [ref=e530]
+                - cell "Packaging Defect" [ref=e531]
+                - cell "—" [ref=e532]
+                - cell "medium" [ref=e533]
+                - cell "resolved" [ref=e534]
+                - cell "2/13/2027" [ref=e535]
+              - row [ref=e536]:
+                - cell "CMP005967" [ref=e537]
+                - cell "Chocolate Wafer" [ref=e538]
+                - cell "Packaging Defect" [ref=e539]
+                - cell "—" [ref=e540]
+                - cell "high" [ref=e541]
+                - cell "investigation in progress" [ref=e542]
+                - cell "2/5/2027" [ref=e543]
+              - row [ref=e544]:
+                - cell "CMP002271" [ref=e545]
+                - cell "Chocolate Wafer" [ref=e546]
+                - cell "Other Customer Concern" [ref=e547]
+                - cell "—" [ref=e548]
+                - cell "high" [ref=e549]
+                - cell "resolved" [ref=e550]
+                - cell "1/31/2027" [ref=e551]
+              - row [ref=e552]:
+                - cell "CMP003347" [ref=e553]
+                - cell "Mango Beverage" [ref=e554]
+                - cell "Sensory Defect" [ref=e555]
+                - cell "—" [ref=e556]
+                - cell "medium" [ref=e557]
+                - cell "resolved" [ref=e558]
+                - cell "1/26/2027" [ref=e559]
+              - row [ref=e560]:
+                - cell "CMP003267" [ref=e561]
+                - cell "Fruit Drink" [ref=e562]
+                - cell "Infestation" [ref=e563]
+                - cell "—" [ref=e564]
+                - cell "low" [ref=e565]
+                - cell "resolved" [ref=e566]
+                - cell "1/20/2027" [ref=e567]
+              - row [ref=e568]:
+                - cell "CMP000035" [ref=e569]
+                - cell "Wheat Flour" [ref=e570]
+                - cell "Sensory Defect" [ref=e571]
+                - cell "—" [ref=e572]
+                - cell "high" [ref=e573]
+                - cell "under review" [ref=e574]
+                - cell "1/18/2027" [ref=e575]
+              - row [ref=e576]:
+                - cell "CMP003014" [ref=e577]
+                - cell "Instant Soup" [ref=e578]
+                - cell "Packaging Defect" [ref=e579]
+                - cell "—" [ref=e580]
+                - cell "high" [ref=e581]
+                - cell "investigation in progress" [ref=e582]
+                - cell "1/17/2027" [ref=e583]
+              - row [ref=e584]:
+                - cell "CMP001273" [ref=e585]
+                - cell "Corn Flakes" [ref=e586]
+                - cell "Packaging Defect" [ref=e587]
+                - cell "—" [ref=e588]
+                - cell "medium" [ref=e589]
+                - cell "investigation in progress" [ref=e590]
+                - cell "1/17/2027" [ref=e591]
+              - row [ref=e592]:
+                - cell "CMP000135" [ref=e593]
+                - cell "Mayonnaise" [ref=e594]
+                - cell "Packaging Defect" [ref=e595]
+                - cell "—" [ref=e596]
+                - cell "high" [ref=e597]
+                - cell "resolved" [ref=e598]
+                - cell "1/16/2027" [ref=e599]
+              - row [ref=e600]:
+                - cell "CMP001068" [ref=e601]
+                - cell "Breakfast Cereal" [ref=e602]
+                - cell "Packaging Defect" [ref=e603]
+                - cell "—" [ref=e604]
+                - cell "medium" [ref=e605]
+                - cell "investigation in progress" [ref=e606]
+                - cell "1/14/2027" [ref=e607]
+          - generic [ref=e608]:
+            - paragraph [ref=e609]: Pending AI-at-scale computation • Sorted by Submission Date (Newest First)
+            - generic [ref=e610]: 10 of 6002 Complaints
+        - paragraph [ref=e612]: Data sourced from Synthetic Manufacturing Quality Intelligence Dataset. Historical records (2008–2026) are generated for demonstration and analysis training only.
+      - generic [ref=e616]:
+        - generic [ref=e617]: © 2025 ZeroQ AI Technologies Inc. All rights reserved. • Enterprise Manufacturing Intelligence
+        - generic [ref=e618]: Demo Environment • Synthetic Quality Dataset Active
+  - generic [aria-hidden] [ref=e620]: "150"
