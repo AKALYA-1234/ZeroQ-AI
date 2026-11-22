@@ -62,3 +62,19 @@ Dev proxy target: `VITE_API_TARGET` (default `http://localhost:8000`); WebSocket
 * The real-time broker is in-process: run a single worker, or replace `EventBroker` with Redis pub/sub.
 * Imported historical complaints have `resolved_date == submitted_date`; they are excluded from
   resolution-time averages.
+
+## Changes from the production-readiness pass (2026-11-22)
+
+See [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md) for evidence, remaining issues and deployment.
+
+* Install with `pip install -r backend/requirements.lock.txt` (tested + audited set). JWT now uses PyJWT.
+* New endpoints: `GET /api/admin/intelligence/llm/status`; `GET /api/complaints/{id}/attachments/{attachment_id}`
+  (owner or admin; the public `/uploads` mount was removed).
+* `kpis` / `trends` take `scope=live|imported|all` (default `live`; the imported dataset is synthetic).
+* `resolve` accepts `units_at_risk` (enables wastage %) and `expected_version` (409 if the incident changed).
+* New prediction source `undetermined`: weak ML guess, no LLM and no symptom rule → no category is presented.
+* Customers can only read their own complaints (others → 404). Login, registration and submission are rate-limited.
+* Model evaluation: `app/intelligence/evaluation.py` + `eval_dataset.py`; every training run stores four separate
+  evaluations, calibration, dataset fingerprint and promotion checks (`models/trained/issue_classifier/<version>.eval.json`).
+* Checks: `scripts/check_llm_connectivity.py`, `scripts/e2e_live_sync.py`, `scripts/ui_responsive_audit.py`,
+  `scripts/load_test.py`; frontend unit tests with `npm test`.

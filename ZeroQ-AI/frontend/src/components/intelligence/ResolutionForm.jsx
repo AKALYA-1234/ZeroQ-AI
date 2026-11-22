@@ -15,11 +15,12 @@ function initialForm(analysis) {
     resolution_action: analysis?.recommended_resolution || '',
     admin_explanation: '',
     units_contained: 0,
+    units_at_risk: '',
     downtime_avoided_hours: 0,
   }
 }
 
-export default function ResolutionForm({ complaintId, analysis, config, onResolved }) {
+export default function ResolutionForm({ complaintId, analysis, config, expectedVersion, onResolved, onStale }) {
   const [form, setForm] = useState(() => initialForm(analysis))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -45,10 +46,13 @@ export default function ResolutionForm({ complaintId, analysis, config, onResolv
         resolution_action: form.resolution_action,
         admin_explanation: form.admin_explanation,
         units_contained: Number(form.units_contained) || 0,
+        units_at_risk: form.units_at_risk === '' ? null : Number(form.units_at_risk),
         downtime_avoided_hours: Number(form.downtime_avoided_hours) || 0,
+        expected_version: expectedVersion || null,
       })
       onResolved?.(res.data)
     } catch (err) {
+      if (err.response?.status === 409) onStale?.()   // someone else changed or resolved it: reload
       const detail = err.response?.data?.detail
       setError(Array.isArray(detail) ? detail.map(d => `${d.loc?.slice(-1)[0]}: ${d.msg}`).join('; ') : (detail || 'Could not resolve the incident. Please try again.'))
     } finally {
@@ -106,17 +110,21 @@ export default function ResolutionForm({ complaintId, analysis, config, onResolv
           <textarea required rows={3} minLength={10} maxLength={4000} className={`${inputCls} resize-y`} value={form.admin_explanation} onChange={set('admin_explanation')}
             placeholder="What went wrong, what we did about it, and what happens next." />
         </label>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <label className="block">
             <span className="text-[11px] font-semibold text-gray-600">Units contained / saved from wastage</span>
             <input type="number" min={0} step={1} inputMode="numeric" className={inputCls} value={form.units_contained} onChange={set('units_contained')} />
+          </label>
+          <label className="block">
+            <span className="text-[11px] font-semibold text-gray-600">Units at risk (affected lot)</span>
+            <input type="number" min={0} step={1} inputMode="numeric" placeholder="Unknown" className={inputCls} value={form.units_at_risk} onChange={set('units_at_risk')} />
           </label>
           <label className="block">
             <span className="text-[11px] font-semibold text-gray-600">Production downtime avoided (hours)</span>
             <input type="number" min={0} step={0.5} inputMode="decimal" className={inputCls} value={form.downtime_avoided_hours} onChange={set('downtime_avoided_hours')} />
           </label>
         </div>
-        <p className="text-[10px] text-gray-500">Impact figures feed the business-impact dashboard. Enter 0 if unknown — nothing is estimated for you.</p>
+        <p className="text-[10px] text-gray-500">Impact figures feed the business-impact dashboard as admin-reported values. Leave "units at risk" empty if unknown — wastage % is then shown as N/A, never estimated.</p>
         {error && <p role="alert" className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-2.5 py-2">{error}</p>}
         <button type="submit" disabled={saving || !form.verified_category || !form.confirmed_root_cause.trim() || !form.resolution_action.trim() || form.admin_explanation.trim().length < 10}
           className="inline-flex items-center gap-2 bg-teal-600 text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2">

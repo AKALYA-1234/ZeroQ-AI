@@ -146,16 +146,32 @@ def detect_language(text: str) -> LanguageInfo:
                         [f"stopword matches: {scores[lang]}"])
 
 
+# Virama / halant signs: an inflected word replaces a stem's final virama with a vowel sign
+# (லேபிள் → லேபிளில், പാക്കറ്റ് → പാക്കറ്റിൽ), so stems are compared without it.
+VIRAMAS = "्্੍્୍்్್്"
+
+
+def _stem(form: str) -> str:
+    return form.rstrip(VIRAMAS)
+
+
 def _native_gloss(token: str, lang: str):
-    """Return (concept_key, gloss) for a native-script token, preferring `lang`."""
+    """Return (concept_key, gloss) for a native-script token.
+
+    Stems match as *word prefixes* (Indic suffixes attach at the end), not as arbitrary
+    substrings — கெட்டு ("spoiled") must not match inside பாக்கெட்டுக்குள் ("inside the packet").
+    The longest matching stem wins; ties prefer the detected language."""
+    best = None
     for key, (gloss, native, _roman) in CONCEPTS.items():
-        forms = native.get(lang, [])
-        if any(f in token for f in forms):
-            return key, gloss
-    for key, (gloss, native, _roman) in CONCEPTS.items():
-        if any(f in token for forms in native.values() for f in forms):
-            return key, gloss
-    return None
+        for form_lang, forms in native.items():
+            for form in forms:
+                stem = _stem(form)
+                if " " in stem or not stem or not token.startswith(stem):
+                    continue
+                rank = (len(stem), form_lang == lang)
+                if best is None or rank > best[0]:
+                    best = (rank, key, gloss)
+    return (best[1], best[2]) if best else None
 
 
 def _roman_gloss(token: str, lang: str):

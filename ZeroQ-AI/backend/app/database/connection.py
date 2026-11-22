@@ -2,53 +2,77 @@ import os
 import socket
 import logging
 from urllib.parse import urlparse
-from sqlalchemy import create_engine
+
+from sqlalchemy import create_engine, event
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
+
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-db_url = settings.DATABASE_URL
-engine = None
+SQLITE_BUSY_TIMEOUT_MS = 10_000
+POSTGRES_POOL_SIZE = 10
+POSTGRES_MAX_OVERFLOW = 20
 
 # SQLite path relative to backend root
 sqlite_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "zeroq_ai.db"))
 sqlite_url = f"sqlite:///{sqlite_file.replace(os.sep, '/')}"
 
-if db_url.startswith("sqlite"):
-    engine = create_engine(db_url, connect_args={"check_same_thread": False})
-else:
-    # Check if PostgreSQL port is open
-    parsed = urlparse(db_url)
-    host = parsed.hostname or "localhost"
-    port = parsed.port or 5432
-    
-    is_open = False
+
+def _configure_sqlite(engine: Engine) -> Engine:
+    """WAL lets readers proceed during a write; busy_timeout makes concurrent writers wait
+    instead of failing with 'database is locked'."""
+    @event.listens_for(engine, "connect")
+    def _pragmas(dbapi_conn, _record):
+        cur = dbapi_conn.cursor()
+        cur.execute("PRAGMA journal_mode=WAL")
+        cur.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")
+        cur.execute("PRAGMA foreign_keys=ON")
+        cur.close()
+    return engine
+
+
+def make_engine(url: str) -> Engine:
+    if url.startswith("sqlite"):
+        return _configure_sqlite(create_engine(url, connect_args={"check_same_thread": False}))
+    return create_engine(url, pool_pre_ping=True, pool_size=POSTGRES_POOL_SIZE,
+                         max_overflow=POSTGRES_MAX_OVERFLOW, pool_recycle=1800)
+
+
+def _port_open(host: str, port: int) -> bool:
     try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(0.5)
-        res = sock.connect_ex((host, port))
-        if res == 0:
-            is_open = True
-        sock.close()
-    except Exception:
-        is_open = False
+        with socket.create_connection((host, port), timeout=0.5):
+            return True
+    except OSError:
+        return False
 
-    if is_open:
-        try:
-            temp_engine = create_engine(db_url, pool_pre_ping=True)
-            with temp_engine.connect() as conn:
-                pass
-            engine = temp_engine
-            logger.info("Connected to PostgreSQL database.")
-        except Exception as e:
-            logger.warning(f"PostgreSQL connection error: {e}. Using SQLite fallback: {sqlite_url}")
-            engine = create_engine(sqlite_url, connect_args={"check_same_thread": False})
-    else:
-        logger.info(f"PostgreSQL not detected on {host}:{port}. Using SQLite: {sqlite_url}")
-        engine = create_engine(sqlite_url, connect_args={"check_same_thread": False})
 
+def _resolve_engine() -> Engine:
+    db_url = settings.DATABASE_URL
+    if db_url.startswith("sqlite"):
+        return make_engine(db_url)
+    parsed = urlparse(db_url)
+    host, port = parsed.hostname or "localhost", parsed.port or 5432
+    try:
+        if not _port_open(host, port):
+            raise ConnectionError(f"PostgreSQL not reachable on {host}:{port}")
+        engine = make_engine(db_url)
+        with engine.connect():
+            pass
+        logger.info("Connected to PostgreSQL database.")
+        return engine
+    except Exception as exc:
+        if settings.is_production:
+            # Never silently switch a production deployment onto a local SQLite file.
+            raise RuntimeError(f"Database unavailable in production: {exc}") from exc
+        logger.warning("PostgreSQL unavailable (%s). Using SQLite fallback: %s", exc, sqlite_url)
+        return make_engine(sqlite_url)
+
+
+engine = _resolve_engine()
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 
 def get_db():
     db = SessionLocal()

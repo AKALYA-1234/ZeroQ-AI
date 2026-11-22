@@ -10,6 +10,7 @@ export default function LearningPanel() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
+  const [llm, setLlm] = useState(null)
 
   const load = useCallback(() => {
     api.get('/api/admin/intelligence/learning/status')
@@ -17,6 +18,7 @@ export default function LearningPanel() {
       .catch(() => setError('Could not load model status.'))
   }, [])
   useEffect(load, [load])
+  useEffect(() => { api.get('/api/admin/intelligence/llm/status').then(r => setLlm(r.data)).catch(() => setLlm(null)) }, [])
   useLiveEvents(load, ['complaint.resolved', 'model.retrained'])
 
   const retrain = async (force) => {
@@ -47,16 +49,30 @@ export default function LearningPanel() {
       <div className="p-4 grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="space-y-3">
           <div>
-            <div className="text-xs text-gray-500">Offline benchmark accuracy</div>
+            <div className="text-xs text-gray-500">Independent multilingual evaluation</div>
             <div className="text-2xl font-bold text-gray-900 tabular-nums">{pctText(m.benchmark_accuracy)}</div>
-            <div className="text-[11px] text-gray-500">{m.benchmark_n} independent multilingual test queries; indicative only</div>
+            <div className="text-[11px] text-gray-500">
+              macro-F1 {m.benchmark_macro_f1 != null ? m.benchmark_macro_f1.toFixed(2) : '—'} · {m.benchmark_n} queries in 6 languages · indicative only
+            </div>
           </div>
-          <div>
-            <div className="text-xs text-gray-500">Verified-incident holdout</div>
-            <div className="text-lg font-semibold text-gray-900 tabular-nums">{m.verified_holdout ? pctText(m.verified_holdout.accuracy) : '—'}</div>
-            <div className="text-[11px] text-gray-500">{m.verified_holdout ? `${m.verified_holdout.n} held-out verified incidents` : 'Needs ≥ 5 held-out verified incidents'}</div>
-          </div>
+          <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+            <dt className="text-gray-500">Historical (templates held out)</dt><dd className="text-right tabular-nums">{pctText(m.historical_grouped_accuracy)}</dd>
+            <dt className="text-gray-500">Verified-incident holdout</dt><dd className="text-right tabular-nums">{m.verified_holdout ? `${pctText(m.verified_holdout.accuracy)} (n=${m.verified_holdout.n})` : 'needs ≥ 5'}</dd>
+            <dt className="text-gray-500">Calibration error (ECE)</dt><dd className="text-right tabular-nums">{m.calibration_after_temperature ? m.calibration_after_temperature.ece.toFixed(3) : '—'}</dd>
+            <dt className="text-gray-500">Confident share / accuracy</dt><dd className="text-right tabular-nums">{pctText(m.benchmark_confident_share)} / {pctText(m.benchmark_confident_accuracy)}</dd>
+            <dt className="text-gray-500">Training data</dt><dd className="text-right font-mono">{m.dataset_fingerprint || '—'}</dd>
+          </dl>
           <div className="text-[11px] text-gray-500">Historical corpus: {status.historical_index?.size?.toLocaleString()} resolved incidents · {status.historical_index?.backend}</div>
+          {llm && (
+            <div className="text-[11px] border-t border-gray-100 pt-2">
+              <span className="font-semibold text-gray-700">LLM fallback: </span>
+              {!llm.configured
+                ? <span className="text-amber-700">not configured — offline glossary and symptom rules are used</span>
+                : <span className={llm.circuit.state === 'open' ? 'text-red-700' : 'text-gray-600'}>
+                    {llm.model} · circuit {llm.circuit.state} · {llm.usage.calls} calls / 30 d · est. ${llm.usage.estimated_cost_usd}
+                  </span>}
+            </div>
+          )}
         </div>
         <div className="space-y-3">
           <div className="flex justify-between text-xs"><span className="text-gray-500">Verified incidents</span><span className="font-semibold tabular-nums">{status.verified_incidents}</span></div>

@@ -84,3 +84,28 @@ def test_symptoms_from_english_packaging_issue():
     names = [s["symptom"] for s in extract_symptoms("The seal was open and the pack was leaking")]
     assert "Seal failure" in names
     assert "Leakage" in names
+
+
+# ── Regression: native-script matching (prefix, virama-insensitive, longest match) ──
+
+def test_spoiled_stem_inside_packet_word_is_not_matched():
+    # கெட்டு ("spoiled") occurs inside பாக்கெட்டுக்குள் ("inside the packet") — must not gloss as spoiled
+    gloss = gloss_to_english("பாக்கெட்டுக்குள் முடி", "ta")
+    assert "spoiled" not in gloss.text
+    assert "packet" in gloss.text and "hair" in gloss.text
+
+
+def test_inflected_words_match_stems_ending_in_virama():
+    assert "label" in gloss_to_english("லேபிளின் மேல்", "ta").text          # லேபிள் + inflection
+    assert "packet" in gloss_to_english("പാക്കറ്റിന്റെ", "ml").text           # പാക്കറ്റ് + inflection
+    assert "seal" in gloss_to_english("ಸೀಲಿನ", "kn").text                    # ಸೀಲ್ + inflection
+
+
+def test_preserves_identifiers_and_numbers_in_gloss():
+    gloss = gloss_to_english("BAT000123 machine M-12 line 3 romba heat aguthu", "ta")
+    for token in ("bat000123", "m-12", "3"):
+        assert token in gloss.text
+
+
+def test_compound_smell_word_is_glossed():
+    assert "odour" in gloss_to_english("சாம்பார் துர்நாற்றம் அடிக்குது", "ta").text

@@ -16,14 +16,21 @@ const PRESETS = [
 const iso = d => d.toISOString().slice(0, 10)
 const num = (v, digits = 0) => (v == null ? null : Number(v).toLocaleString(undefined, { maximumFractionDigits: digits }))
 
-function Stat({ label, value, unit, note, tone }) {
+const BASIS_LABEL = {
+  admin_reported: 'Admin-reported', admin_estimate: 'Admin estimate', customer_reported: 'Customer-reported',
+  computed: 'Computed', estimate: 'Estimate (assumption-based)',
+}
+
+function Stat({ label, value, unit, note, tone, basis }) {
   const empty = value == null
   return (
     <div className="px-4 py-3 min-w-0">
       <dt className="text-xs text-gray-500 truncate" title={label}>{label}</dt>
-      <dd className={`mt-1 text-2xl font-bold tabular-nums ${empty ? 'text-gray-300' : 'text-gray-900'}`}>
-        {empty ? '—' : value}{!empty && unit && <span className="text-sm font-semibold text-gray-500 ml-0.5">{unit}</span>}
+      <dd className={`mt-1 text-2xl font-bold tabular-nums ${empty ? 'text-gray-400' : 'text-gray-900'}`}>
+        {empty ? <span title="Not available — no supporting data">N/A</span> : value}
+        {!empty && unit && <span className="text-sm font-semibold text-gray-500 ml-0.5">{unit}</span>}
       </dd>
+      {basis && <dd className="text-[10px] uppercase tracking-wide text-gray-400 mt-0.5">{BASIS_LABEL[basis] || basis}</dd>}
       {note && <dd className={`text-[11px] mt-0.5 ${tone === 'good' ? 'text-emerald-700' : tone === 'bad' ? 'text-red-700' : 'text-gray-500'}`}>{note}</dd>}
     </div>
   )
@@ -51,6 +58,8 @@ export default function AIImpactAnalytics() {
   const [preset, setPreset] = useState('12m')
   const [custom, setCustom] = useState({ start: '', end: '' })
   const [category, setCategory] = useState('')
+  const [scope, setScope] = useState('live')
+  const [llmStatus, setLlmStatus] = useState(null)
   const [categories, setCategories] = useState([])
   const [kpis, setKpis] = useState(null)
   const [trends, setTrends] = useState(null)
@@ -68,7 +77,7 @@ export default function AIImpactAnalytics() {
 
   const load = useCallback(async () => {
     setError('')
-    const params = { ...range, ...(category ? { category } : {}) }
+    const params = { ...range, scope, ...(category ? { category } : {}) }
     try {
       const [k, t] = await Promise.all([
         api.get('/api/admin/intelligence/kpis', { params }),
@@ -79,18 +88,20 @@ export default function AIImpactAnalytics() {
     } catch (err) {
       setError(err.response?.data?.detail || 'Could not load analytics.')
     } finally { setLoading(false) }
-  }, [range, category])
+  }, [range, category, scope])
 
   useEffect(() => { setLoading(true); load() }, [load])
   useEffect(() => { api.get('/api/admin/intelligence/config').then(r => setCategories(r.data.categories || [])).catch(() => {}) }, [])
+  useEffect(() => { api.get('/api/admin/intelligence/llm/status').then(r => setLlmStatus(r.data)).catch(() => setLlmStatus(null)) }, [])
   useLiveEvents(() => load(), ['complaint.resolved', 'analysis.completed', 'feedback.submitted'])
 
   const im = kpis?.issue_management || {}
   const ai = kpis?.ai_performance || {}
   const bi = kpis?.business_impact || {}
   const resTime = changeNote(im.avg_resolution_days_change_pct, true)
+  const sample = bi.repeat_sample || {}
   const repeat = bi.repeat_incident_reduction_pct == null
-    ? { note: bi.repeat_incident_rate_pct != null ? `Current repeat rate ${bi.repeat_incident_rate_pct}%` : 'No data' }
+    ? { note: `Needs ≥ ${sample.minimum} complaints per period (now ${sample.current ?? 0} / prior ${sample.prior ?? 0})` }
     : { note: `Repeat rate ${bi.repeat_incident_rate_prior_pct}% → ${bi.repeat_incident_rate_pct}%`, tone: bi.repeat_incident_reduction_pct > 0 ? 'good' : 'bad' }
 
   return (
@@ -125,7 +136,14 @@ export default function AIImpactAnalytics() {
             </label>
           </div>
         )}
-        <label className="text-xs text-gray-600 sm:ml-auto">Category
+        <label className="text-xs text-gray-600 sm:ml-auto">Data
+          <select value={scope} onChange={e => setScope(e.target.value)} className="block mt-0.5 border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white">
+            <option value="live">Live platform data</option>
+            <option value="imported">Imported historical dataset</option>
+            <option value="all">Both</option>
+          </select>
+        </label>
+        <label className="text-xs text-gray-600">Category
           <select value={category} onChange={e => setCategory(e.target.value)} className="block mt-0.5 border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white min-w-[12rem]">
             <option value="">All categories</option>
             {categories.map(c => <option key={c} value={c}>{c}</option>)}
@@ -133,6 +151,11 @@ export default function AIImpactAnalytics() {
         </label>
       </div>
 
+      {scope !== 'live' && (
+        <p role="note" className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          Includes the imported historical dataset (synthetic records loaded at setup). These figures are not live production results.
+        </p>
+      )}
       {error && <p role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">{error}</p>}
       {loading && !kpis ? (
         <div className="py-16 flex justify-center"><Loader2 className="animate-spin motion-reduce:animate-none text-teal-600" aria-label="Loading analytics" /></div>
@@ -154,21 +177,26 @@ export default function AIImpactAnalytics() {
             <Stat label="Prediction accuracy" value={num(ai.prediction_accuracy_pct, 1)} unit="%"
               note={ai.verified_predictions ? `${ai.verified_predictions} verified` : 'No verified predictions yet'} />
             <Stat label="ML predictions" value={num(ai.ml_prediction_count)} note={`of ${num(ai.predictions_total)} total`} />
-            <Stat label="LLM fallbacks" value={num(ai.llm_fallback_count)} note={`Rule-based: ${num(ai.rules_fallback_count)}`} />
+            <Stat label="LLM fallbacks" value={num(ai.llm_fallback_count)}
+              note={llmStatus && !llmStatus.configured ? 'LLM not configured' : `Rules: ${num(ai.rules_fallback_count)} · Undetermined: ${num(ai.undetermined_count)}`} />
             <Stat label="Low-confidence" value={num(ai.low_confidence_count)} />
             <Stat label="Admin correction rate" value={num(ai.admin_correction_rate_pct, 1)} unit="%" />
-            <Stat label="Offline benchmark" value={num(ai.offline_benchmark_accuracy_pct, 1)} unit="%" note="Independent test set" />
+            <Stat label="Offline benchmark" value={num(ai.offline_benchmark_accuracy_pct, 1)} unit="%"
+              note={ai.offline_benchmark_n ? `Independent test set, n=${ai.offline_benchmark_n}` : 'Independent test set'} />
           </StatGroup>
 
           <StatGroup title="Business impact" caption="Admin-recorded figures and documented assumptions — nothing is estimated silently">
-            <Stat label="Products saved" value={num(bi.products_saved_units)} unit=" units" />
-            <Stat label="Wastage reduction" value={num(bi.wastage_reduction_pct, 1)} unit="%" note="Contained ÷ at-risk units" />
+            <Stat label="Products saved" value={num(bi.products_saved_units)} unit=" units" basis={bi.metric_basis?.products_saved_units} />
+            <Stat label="Wastage reduction" value={num(bi.wastage_reduction_pct, 1)} unit="%" basis={bi.metric_basis?.wastage_reduction_pct}
+              note={bi.wastage_sample ? `Contained ÷ at-risk, ${bi.wastage_sample} incidents` : 'No at-risk units recorded'} />
             <Stat label="Est. cost saved" value={bi.estimated_cost_saved_inr == null ? null : `₹${num(bi.estimated_cost_saved_inr)}`}
+              basis={bi.metric_basis?.estimated_cost_saved_inr}
               note={bi.estimated_cost_saved_inr == null ? 'Unit costs not configured' : undefined} />
-            <Stat label="Downtime avoided" value={num(bi.downtime_avoided_hours, 1)} unit=" h" />
-            <Stat label="Customer satisfaction" value={num(bi.customer_satisfaction_pct, 1)} unit="%"
+            <Stat label="Downtime avoided" value={num(bi.downtime_avoided_hours, 1)} unit=" h" basis={bi.metric_basis?.downtime_avoided_hours} />
+            <Stat label="Customer satisfaction" value={num(bi.customer_satisfaction_pct, 1)} unit="%" basis={bi.metric_basis?.customer_satisfaction_pct}
               note={bi.feedback_count ? `${bi.feedback_count} ratings · avg ${bi.avg_rating}/5` : 'No ratings yet'} />
-            <Stat label="Repeat incident reduction" value={num(bi.repeat_incident_reduction_pct, 1)} unit="%" {...repeat} />
+            <Stat label="Repeat incident reduction" value={num(bi.repeat_incident_reduction_pct, 1)} unit="%"
+              basis={bi.metric_basis?.repeat_incident_reduction_pct} {...repeat} />
           </StatGroup>
 
           {trends && (

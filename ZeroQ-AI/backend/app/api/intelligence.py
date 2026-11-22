@@ -4,11 +4,12 @@ learning controls, impact analytics and the real-time WebSocket channel.
 """
 import asyncio
 import logging
-from datetime import datetime
+import time
+from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -99,6 +100,7 @@ def serialize_resolution(r: Optional[IncidentResolution], audience: str = "admin
         "id": r.id, "predicted_category": r.predicted_category, "prediction_source": r.prediction_source,
         "category_correct": r.category_correct, "root_cause_correct": r.root_cause_correct,
         "corrected_fields": r.corrected_fields or [], "units_contained": r.units_contained,
+        "units_at_risk": r.units_at_risk,
         "downtime_avoided_hours": r.downtime_avoided_hours, "resolved_by": r.resolved_by,
         "used_in_training_run": r.used_in_training_run,
     }
@@ -137,6 +139,29 @@ def _store_failed_analysis(db: Session, complaint: Complaint, exc: Exception) ->
     db.commit()
 
 
+RECOVERY_BATCH_LIMIT = 200
+
+
+def recover_missing_analyses(bind) -> int:
+    """Re-run analysis for live complaints that have none (e.g. the process stopped before the
+    background job ran). Failed analyses are left for an admin to re-run, to avoid retry loops.
+    Returns how many complaints were analysed."""
+    db = Session(bind=bind)
+    try:
+        missing = (db.query(Complaint.id)
+                   .outerjoin(IssueAnalysis, IssueAnalysis.complaint_id == Complaint.id)
+                   .filter(IssueAnalysis.id.is_(None), Complaint.submitted_by_user_id.isnot(None),
+                           Complaint.customer_id.is_(None))   # live submissions, not the imported dataset
+                   .order_by(Complaint.id.desc()).limit(RECOVERY_BATCH_LIMIT).all())
+    finally:
+        db.close()
+    for (pk,) in missing:
+        analyze_complaint_job(bind, pk)
+    if missing:
+        logger.info("Recovered %d complaint analyses", len(missing))
+    return len(missing)
+
+
 # ── admin: analysis & verification ────────────────────────────────────────
 
 def _get_complaint(db: Session, complaint_id: str) -> Complaint:
@@ -150,12 +175,51 @@ def _get_complaint(db: Session, complaint_id: str) -> Complaint:
 def get_config(current_user=Depends(get_current_admin)):
     return {
         "llm_available": llm.is_llm_available(),
-        "llm_model": settings.LLM_MODEL if llm.is_llm_available() else None,
+        "llm_configured": llm.is_configured(),
+        "llm_model": settings.LLM_MODEL if llm.is_configured() else None,
         "ml_confidence_threshold": settings.ML_CONFIDENCE_THRESHOLD,
         "min_historical_similarity": settings.MIN_HISTORICAL_SIMILARITY,
         "categories": CATEGORIES,
         "subcategories": SUBCATEGORY_TO_CATEGORY,
         "assumptions": assumptions(),
+    }
+
+
+LLM_USAGE_WINDOW_DAYS = 30
+
+
+@router.get("/llm/status")
+def get_llm_status(current_user=Depends(get_current_admin), db: Session = Depends(get_db)):
+    """Operational view of the LLM fallback. Never returns credentials."""
+    since = datetime.utcnow() - timedelta(days=LLM_USAGE_WINDOW_DAYS)
+    rows = db.query(IssueAnalysis.llm_result).filter(
+        IssueAnalysis.llm_result.isnot(None), IssueAnalysis.created_at >= since).all()
+    totals = {"calls": 0, "input_tokens": 0, "output_tokens": 0, "estimated_cost_usd": 0.0}
+    by_op: dict = {}
+    for (res,) in rows:
+        for u in (res or {}).get("usage", []):
+            totals["calls"] += 1
+            totals["input_tokens"] += u.get("input_tokens", 0)
+            totals["output_tokens"] += u.get("output_tokens", 0)
+            totals["estimated_cost_usd"] += u.get("estimated_cost_usd", 0.0)
+            op = by_op.setdefault(u.get("operation", "unknown"), {"calls": 0, "latency_ms_total": 0})
+            op["calls"] += 1
+            op["latency_ms_total"] += u.get("latency_ms", 0)
+    for op in by_op.values():
+        op["avg_latency_ms"] = round(op.pop("latency_ms_total") / op["calls"]) if op["calls"] else None
+    totals["estimated_cost_usd"] = round(totals["estimated_cost_usd"], 4)
+    return {
+        "configured": llm.is_configured(),
+        "enabled": settings.LLM_ENABLED,
+        "model": settings.LLM_MODEL,
+        "circuit": llm.circuit_status(),
+        "usage_window_days": LLM_USAGE_WINDOW_DAYS,
+        "usage": totals,
+        "by_operation": by_op,
+        "pricing_note": (f"Cost is an estimate at list price ${settings.LLM_INPUT_PRICE_PER_MTOK}/"
+                         f"${settings.LLM_OUTPUT_PRICE_PER_MTOK} per million input/output tokens."),
+        "setup_required": None if llm.is_configured() else
+        "Set ANTHROPIC_API_KEY in the backend environment (and keep LLM_ENABLED=true) to enable the LLM fallback.",
     }
 
 
@@ -196,7 +260,18 @@ class ResolveRequest(BaseModel):
     resolution_action: str = Field(min_length=3, max_length=2000)
     admin_explanation: str = Field(min_length=10, max_length=4000)
     units_contained: int = Field(default=0, ge=0, le=10_000_000)
+    # Units of the affected batch/lot that were at risk; required for a wastage-reduction %.
+    units_at_risk: Optional[int] = Field(default=None, ge=0, le=10_000_000)
     downtime_avoided_hours: float = Field(default=0.0, ge=0.0, le=10_000)
+    # Optimistic concurrency: the complaint `version` the admin was looking at. If the complaint
+    # changed since (another admin, a status update), the resolve is rejected with 409.
+    expected_version: Optional[str] = Field(default=None, max_length=40)
+
+    @model_validator(mode="after")
+    def _contained_within_at_risk(self):
+        if self.units_at_risk is not None and self.units_contained > self.units_at_risk:
+            raise ValueError("units_contained cannot exceed units_at_risk")
+        return self
 
     @field_validator("verified_category", "verified_subcategory", "confirmed_root_cause",
                      "resolution_action", "admin_explanation")
@@ -212,9 +287,17 @@ def _norm(s: Optional[str]) -> str:
 @router.post("/incidents/{complaint_id}/resolve")
 def resolve_incident(complaint_id: str, body: ResolveRequest, current_user=Depends(get_current_admin),
                      db: Session = Depends(get_db)):
-    complaint = _get_complaint(db, complaint_id)
+    # Row lock on databases that support it (PostgreSQL); the unique constraint on
+    # incident_resolutions.complaint_id is the guard everywhere (incl. SQLite).
+    complaint = (db.query(Complaint).filter(Complaint.complaint_id == complaint_id)
+                 .with_for_update().first())
+    if not complaint:
+        raise HTTPException(status_code=404, detail="Complaint not found")
     if db.query(IncidentResolution).filter(IncidentResolution.complaint_id == complaint.id).first():
         raise HTTPException(status_code=409, detail="Incident already resolved")
+    current_version = complaint.last_updated.isoformat() if complaint.last_updated else None
+    if body.expected_version and body.expected_version != current_version:
+        raise HTTPException(status_code=409, detail="This incident changed since you opened it. Reload and review.")
     analysis = db.query(IssueAnalysis).filter(IssueAnalysis.complaint_id == complaint.id).first()
 
     corrected = []
@@ -241,7 +324,7 @@ def resolve_incident(complaint_id: str, body: ResolveRequest, current_user=Depen
         verified_category=body.verified_category, verified_subcategory=body.verified_subcategory,
         confirmed_root_cause=body.confirmed_root_cause, resolution_action=body.resolution_action,
         admin_explanation=body.admin_explanation, category_correct=cat_ok, root_cause_correct=rc_ok,
-        corrected_fields=corrected, units_contained=body.units_contained,
+        corrected_fields=corrected, units_contained=body.units_contained, units_at_risk=body.units_at_risk,
         downtime_avoided_hours=body.downtime_avoided_hours, resolved_by=current_user.email, resolved_at=now,
     )
     old_status = complaint.status
@@ -300,18 +383,23 @@ def _parse_date(value: Optional[str], end_of_day: bool = False) -> Optional[date
     return d.replace(hour=23, minute=59, second=59) if end_of_day and len(value) <= 10 else d
 
 
+SCOPE_PATTERN = "^(live|imported|all)$"
+
+
 @router.get("/kpis")
 def kpis(start: Optional[str] = Query(None), end: Optional[str] = Query(None),
          category: Optional[str] = Query(None, max_length=120),
+         scope: str = Query("live", pattern=SCOPE_PATTERN),
          current_user=Depends(get_current_admin), db: Session = Depends(get_db)):
-    return compute_kpis(db, _parse_date(start), _parse_date(end, True), category or None)
+    return compute_kpis(db, _parse_date(start), _parse_date(end, True), category or None, scope)
 
 
 @router.get("/trends")
 def trends(start: Optional[str] = Query(None), end: Optional[str] = Query(None),
            category: Optional[str] = Query(None, max_length=120),
+           scope: str = Query("live", pattern=SCOPE_PATTERN),
            current_user=Depends(get_current_admin), db: Session = Depends(get_db)):
-    return compute_trends(db, _parse_date(start), _parse_date(end, True), category or None)
+    return compute_trends(db, _parse_date(start), _parse_date(end, True), category or None, scope)
 
 
 # ── learning ──────────────────────────────────────────────────────────────
@@ -362,10 +450,17 @@ async def events_socket(websocket: WebSocket, db: Session = Depends(get_db)):
     broker.register(websocket, user.id, user.role)
     try:
         await websocket.send_json({"type": "connected", "user_id": user.id, "role": user.role})
+        expires_at = float(payload.get("exp", 0)) or None
         while True:
-            message = await websocket.receive_text()
+            remaining = (expires_at - time.time()) if expires_at else None
+            if remaining is not None and remaining <= 0:
+                raise asyncio.TimeoutError
+            message = await asyncio.wait_for(websocket.receive_text(), timeout=remaining)
             if message == "ping":
                 await websocket.send_text("pong")
+    except asyncio.TimeoutError:
+        # Token expired: the client must re-authenticate (a fresh login issues a new token).
+        await websocket.close(code=4401)
     except WebSocketDisconnect:
         pass
     finally:

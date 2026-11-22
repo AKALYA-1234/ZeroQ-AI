@@ -1,20 +1,29 @@
-fastapi==0.111.0
-uvicorn[standard]==0.29.0
-sqlalchemy==2.0.30
-psycopg2-binary==2.9.9
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-python-multipart==0.0.9
-pydantic[email]==2.7.1
-pydantic-settings==2.2.1
-alembic==1.13.1
-pandas==2.2.2
-numpy==1.26.4
-scikit-learn==1.5.0
-xgboost==2.0.3
-joblib==1.4.2
-python-dotenv==1.0.1
-aiofiles==23.2.1
-pillow==10.3.0
-# Issue intelligence - LLM fallback (optional at runtime; disabled without ANTHROPIC_API_KEY)
-anthropic>=0.125.0
+# Runtime dependencies — exact versions the full test suite passes on (see requirements.lock.txt
+# for the complete, vulnerability-audited set incl. transitive packages). Python 3.13.
+# Web / API
+fastapi==0.165.0
+starlette==1.10.0
+uvicorn[standard]==0.30.1
+python-multipart==0.0.34
+pydantic==2.13.4
+pydantic-settings==2.11.0
+email-validator==2.3.0
+python-dotenv==1.2.2
+# Auth (PyJWT replaces the unmaintained python-jose; bcrypt is used directly)
+PyJWT==2.15.0
+bcrypt==4.0.1
+# Data
+SQLAlchemy==2.0.43
+psycopg2-binary==2.9.12
+alembic==1.16.5
+redis==7.1.0
+# ML (versions the saved XGBoost model + preprocessor are verified with)
+pandas==2.3.3
+numpy==2.4.4
+scikit-learn==1.9.0
+xgboost==3.2.0
+joblib==1.5.1
+# LLM fallback (inactive unless ANTHROPIC_API_KEY is set)
+anthropic==0.125.0
+# Optional: semantic retrieval with a local embedding model (EMBEDDING_BACKEND=auto); TF-IDF is used without it.
+# sentence-transformers==5.1.2

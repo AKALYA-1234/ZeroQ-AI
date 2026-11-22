@@ -1,5 +1,5 @@
 import React from 'react'
-import { Brain, Sparkles, ListChecks, ShieldCheck, AlertTriangle } from 'lucide-react'
+import { Brain, Sparkles, ListChecks, ShieldCheck, AlertTriangle, HelpCircle } from 'lucide-react'
 
 // Prediction provenance must always be visible: ML vs LLM-assisted vs rules vs verified.
 export const SOURCE_META = {
@@ -11,6 +11,8 @@ export const SOURCE_META = {
     hint: 'Symptom rules (model unsure, no LLM configured)' },
   verified: { label: 'Admin verified', className: 'bg-emerald-50 text-emerald-800 border-emerald-200', Icon: ShieldCheck,
     hint: 'Confirmed by a quality administrator' },
+  undetermined: { label: 'Undetermined', className: 'bg-gray-50 text-gray-700 border-gray-300', Icon: HelpCircle,
+    hint: 'No reliable prediction (model unsure, no LLM, no symptom rule) — admin assessment needed' },
   none: { label: 'No prediction', className: 'bg-gray-50 text-gray-600 border-gray-200', Icon: AlertTriangle,
     hint: 'Analysis failed' },
 }

@@ -70,7 +70,7 @@ export function ResolutionEvidence({ options }) {
   )
 }
 
-export function SimilarIncidents({ incidents }) {
+export function SimilarIncidents({ incidents, minSimilarity = 0.2 }) {
   const [expanded, setExpanded] = useState(false)
   const shown = expanded ? incidents : (incidents || []).slice(0, INITIAL_INCIDENTS)
   return (
@@ -84,7 +84,9 @@ export function SimilarIncidents({ incidents }) {
                   <span className="font-mono font-semibold text-gray-900">{inc.complaint_id}</span>
                   <span className="text-gray-500">{inc.subcategory || inc.category}</span>
                   {inc.product && <span className="text-gray-500">· {inc.product}</span>}
-                  <span className="ml-auto tabular-nums font-semibold text-teal-700" title="Text similarity">{pct(inc.similarity)} match</span>
+                  {inc.similarity < minSimilarity
+                    ? <span className="ml-auto tabular-nums font-semibold text-gray-500" title="Below the similarity threshold — shown for comparison only, not used as evidence">{pct(inc.similarity)} · weak match</span>
+                    : <span className="ml-auto tabular-nums font-semibold text-teal-700" title="Text similarity">{pct(inc.similarity)} match</span>}
                 </div>
                 <p className="text-xs text-gray-700 mt-0.5">{inc.description}</p>
                 <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-0.5 mt-1 text-[11px]">

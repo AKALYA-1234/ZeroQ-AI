@@ -84,6 +84,7 @@ class IncidentResolution(Base):
 
     # Admin-entered impact figures (never inferred).
     units_contained = Column(Integer, default=0)
+    units_at_risk = Column(Integer, nullable=True)   # admin-recorded; enables wastage-reduction %
     downtime_avoided_hours = Column(Float, default=0.0)
 
     resolved_by = Column(String(255), nullable=True)

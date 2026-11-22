@@ -32,7 +32,7 @@ def _entities(original: str, english: str) -> dict:
     return entities
 
 
-def understand(text: str, allow_llm: bool = True) -> dict:
+def understand(text: str, allow_llm: bool = True, usage_log: Optional[list] = None) -> dict:
     original = (text or "").strip()
     lang = detect_language(original)
     english: Optional[str] = None
@@ -44,7 +44,7 @@ def understand(text: str, allow_llm: bool = True) -> dict:
     else:
         if allow_llm and llm.is_llm_available():
             try:
-                english = llm.translate(original, lang.name)
+                english = llm.translate(original, lang.name, usage_log=usage_log)
                 method = "llm"
             except llm.LLMUnavailable:
                 english = None

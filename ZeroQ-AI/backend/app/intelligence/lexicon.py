@@ -148,13 +148,13 @@ CONCEPTS = {
         "kn": ["sorike"],
     }),
     "smell": ("off odour bad smell", {
-        "ta": ["நாற்றம்", "நாத்தம்", "வாசனை"],
+        "ta": ["துர்நாற்றம்", "நாற்றம்", "நாத்தம்", "வாசனை"],
         "hi": ["बदबू", "गंध", "दुर्गंध"],
         "te": ["దుర్వాసన", "వాసన"],
         "ml": ["ദുർഗന്ധ", "നാറ്റ"],
         "kn": ["ದುರ್ವಾಸನೆ", "ವಾಸನೆ"],
     }, {
-        "ta": ["naatram", "naathram", "nathamu", "natham", "vasanai"],
+        "ta": ["naatram", "naathram", "naatham", "nathamu", "natham", "vasanai"],
         "hi": ["badbu", "badboo", "gandh", "durgandh"],
         "te": ["durvasana", "vasana"],
         "ml": ["naattam", "durgandham"],

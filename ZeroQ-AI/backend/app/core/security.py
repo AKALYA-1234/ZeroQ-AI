@@ -1,6 +1,7 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
-from jose import JWTError, jwt
+
+import jwt  # PyJWT (python-jose is unmaintained and has an unpatched advisory)
 import bcrypt
 from app.core.config import settings
 
@@ -19,17 +20,28 @@ def get_password_hash(password: str) -> str:
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
+    now = datetime.now(timezone.utc)
+    expire = now + (expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
+    to_encode.update({"exp": expire, "iat": now})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
 def decode_token(token: str) -> Optional[dict]:
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        return payload
-    except JWTError:
+        # Only the configured algorithm is accepted (no "none", no algorithm confusion); exp is required.
+        return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM],
+                          options={"require": ["exp", "sub"]})
+    except jwt.PyJWTError:
         return None
+
+
+PASSWORD_MIN_LENGTH = 8
+
+
+def password_policy_error(password: str):
+    """Return a human-readable reason if the password is too weak, else None."""
+    if len(password or "") < PASSWORD_MIN_LENGTH:
+        return f"Password must be at least {PASSWORD_MIN_LENGTH} characters"
+    if not any(c.isalpha() for c in password) or not any(c.isdigit() for c in password):
+        return "Password must contain both letters and numbers"
+    return None

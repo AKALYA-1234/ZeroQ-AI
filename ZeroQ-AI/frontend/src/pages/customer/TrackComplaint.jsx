@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { Search, FileText, Clock, CheckCircle, AlertCircle, ArrowRight, Info } from 'lucide-react'
 import api from '../../services/api'
 import { useLiveEvents, useLiveStatus } from '../../hooks/useLiveEvents'
+import { isStale } from '../../services/liveEventsCore'
 import { AIUnderstandingCard, ResolutionCard, FeedbackCard, ResolutionTimeline } from '../../components/intelligence/CustomerResolution'
 
 const STATUS_STEPS = ['Submitted', 'Under Review', 'Investigating', 'Resolved']
@@ -36,7 +37,7 @@ export default function TrackComplaint() {
         api.get(`/api/complaints/${cid}/timeline`).catch(() => ({ data: { history: [] } })),
       ])
       // Ignore stale responses: keep the newer version if one already arrived.
-      setComplaint(prev => (prev && prev.complaint_id === res.data.complaint_id && prev.version && res.data.version && prev.version > res.data.version) ? prev : res.data)
+      setComplaint(prev => (prev && prev.complaint_id === res.data.complaint_id && isStale(prev, res.data)) ? prev : res.data)
       setTimeline(tl.data.history || [])
     } catch (err) {
       if (!quiet) { setError('Complaint not found. Please check the ID and try again.'); setComplaint(null) }

@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from app.core import rate_limit
 from sqlalchemy.orm import Session
 from datetime import timedelta
 from app.database.connection import get_db
@@ -12,7 +13,8 @@ from app.core.dependencies import get_current_user
 router = APIRouter()
 
 @router.post("/register", response_model=Token)
-def register(user_data: UserRegister, db: Session = Depends(get_db)):
+def register(user_data: UserRegister, request: Request, db: Session = Depends(get_db)):
+    rate_limit.hit(f"register:{rate_limit.client_ip(request)}", rate_limit.REGISTER_LIMIT)
     existing = db.query(User).filter(User.email == user_data.email).first()
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -46,9 +48,13 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
     )
 
 @router.post("/login", response_model=Token)
-def login(credentials: UserLogin, db: Session = Depends(get_db)):
+def login(credentials: UserLogin, request: Request, db: Session = Depends(get_db)):
+    # Lock out an (ip, email) pair after repeated failures; successful logins are not counted.
+    limit_key = f"login:{rate_limit.client_ip(request)}:{credentials.email.lower()}"
+    rate_limit.ensure_below(limit_key, rate_limit.LOGIN_FAILURE_LIMIT)
     user = db.query(User).filter(User.email == credentials.email).first()
     if not user or not verify_password(credentials.password, user.hashed_password):
+        rate_limit.record(limit_key, rate_limit.LOGIN_FAILURE_LIMIT)
         raise HTTPException(status_code=401, detail="Invalid email or password")
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Account is inactive")

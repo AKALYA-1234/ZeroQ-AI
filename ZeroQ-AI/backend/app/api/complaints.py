@@ -1,14 +1,18 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, Form, Query
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 from typing import List, Optional
 from datetime import datetime
-import os, uuid, shutil
+import logging
+import os
+import uuid
 from app.database.connection import get_db
 from app.core.dependencies import get_current_customer, get_current_user
 from app.core.config import settings
+from app.core import rate_limit
+from app.intelligence.taxonomy import SEVERITIES
 from app.models.complaint import Complaint, ComplaintAttachment, ComplaintStatusHistory
 from app.models.product import Product, ProductionBatch
 from app.models.user import User
@@ -21,49 +25,103 @@ MAX_DESCRIPTION_CHARS = 8000
 SATISFIED_MIN_RATING = 4
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
-ALLOWED_TYPES = {"image/jpeg", "image/png", "image/jpg", "application/pdf"}
-ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".pdf"}
+# Accepted attachment types, identified by content (magic bytes), not by the client's claim.
+FILE_SIGNATURES = {
+    ".png": (b"\x89PNG\r\n\x1a\n", "image/png"),
+    ".jpg": (b"\xff\xd8\xff", "image/jpeg"),
+    ".jpeg": (b"\xff\xd8\xff", "image/jpeg"),
+    ".pdf": (b"%PDF-", "application/pdf"),
+}
+MAX_FILES_PER_COMPLAINT = 5
+ID_COLLISION_RETRIES = 5
 
-def generate_complaint_id(db: Session) -> str:
-    count = db.query(func.count(Complaint.id)).scalar() or 0
-    return f"CMP{(count + 1):06d}"
+
+def _assign_complaint_id(db: Session, complaint: Complaint) -> None:
+    """Derive the public ID from the primary key (unique by construction); if an imported
+    record already uses that code, add a random suffix. The unique index is the final guard."""
+    candidate = f"CMP{complaint.id:06d}"
+    for _ in range(ID_COLLISION_RETRIES):
+        if not db.query(Complaint.id).filter(Complaint.complaint_id == candidate).first():
+            complaint.complaint_id = candidate
+            return
+        candidate = f"CMP{complaint.id:06d}-{uuid.uuid4().hex[:4].upper()}"
+    raise HTTPException(status_code=503, detail="Could not allocate a complaint ID; please retry")
+
+
+def _parse_optional_date(value: Optional[str], field: str) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        raise HTTPException(status_code=422, detail=f"{field} must be an ISO date (YYYY-MM-DD)")
+
+
+def _store_upload(file: UploadFile, complaint_pk: int, written: List[str]):
+    """Validate and store one upload. Returns (attachment, None) or (None, warning)."""
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in FILE_SIGNATURES:
+        return None, f"{file.filename}: Invalid file type"
+    limit = settings.MAX_FILE_SIZE_MB * 1024 * 1024
+    content = file.file.read(limit + 1)          # bounded read: never buffers more than the limit
+    if len(content) > limit:
+        return None, f"{file.filename}: File too large"
+    signature, mime = FILE_SIGNATURES[ext]
+    if not content.startswith(signature):
+        return None, f"{file.filename}: File content does not match its type"
+    safe_name = f"{uuid.uuid4()}{ext}"
+    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    file_path = os.path.join(settings.UPLOAD_DIR, safe_name)
+    with open(file_path, "wb") as fh:
+        fh.write(content)
+    written.append(file_path)
+    return ComplaintAttachment(complaint_id=complaint_pk, filename=safe_name,
+                               original_filename=os.path.basename(file.filename)[:255],
+                               file_path=file_path, file_size=len(content), content_type=mime), None
+
 
 @router.post("/")
 @router.post("")
-async def submit_complaint(
+def submit_complaint(
     background_tasks: BackgroundTasks,
     product_id: int = Form(...),
     title: str = Form(..., max_length=500),
     description: str = Form(..., max_length=MAX_DESCRIPTION_CHARS),
-    category: Optional[str] = Form(None),
-    reported_severity: Optional[str] = Form(None),
-    batch_number: Optional[str] = Form(None),
+    category: Optional[str] = Form(None, max_length=100),
+    reported_severity: Optional[str] = Form(None, max_length=20),
+    batch_number: Optional[str] = Form(None, max_length=100),
     purchase_date: Optional[str] = Form(None),
     date_of_issue: Optional[str] = Form(None),
-    place_of_purchase: Optional[str] = Form(None),
+    place_of_purchase: Optional[str] = Form(None, max_length=255),
     files: List[UploadFile] = File(default=[]),
     current_user: User = Depends(get_current_customer),
     db: Session = Depends(get_db)
 ):
+    # Sync handler: FastAPI runs it in the thread pool, so DB / file I/O never blocks the event loop.
+    rate_limit.hit(f"submit:{current_user.id}", rate_limit.SUBMIT_LIMIT)
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     if not title.strip() or not description.strip():
         raise HTTPException(status_code=422, detail="Title and description are required")
+    if len([f for f in files if f.filename]) > MAX_FILES_PER_COMPLAINT:
+        raise HTTPException(status_code=422, detail=f"At most {MAX_FILES_PER_COMPLAINT} attachments")
     # Empty category / severity mean "let the AI identify it".
     category = (category or "").strip() or None
-    reported_severity = (reported_severity or "").strip() or None
-    
+    reported_severity = (reported_severity or "").strip().lower() or None
+    if reported_severity and reported_severity not in SEVERITIES:
+        raise HTTPException(status_code=422, detail="Invalid severity")
+    purchase = _parse_optional_date(purchase_date, "purchase_date")
+    issue_date = _parse_optional_date(date_of_issue, "date_of_issue")
+
     profile = db.query(CustomerProfile).filter(CustomerProfile.user_id == current_user.id).first()
     batch = None
     if batch_number and batch_number.strip():
         batch = db.query(ProductionBatch).filter(ProductionBatch.batch_id == batch_number.strip().upper()).first()
 
-    complaint_id = generate_complaint_id(db)
-    
     complaint = Complaint(
-        complaint_id=complaint_id,
         record_type="customer_submitted",
         submitted_by_user_id=current_user.id,
         customer_name=profile.full_name if profile else None,
@@ -73,60 +131,42 @@ async def submit_complaint(
         product_id=product_id,
         batch_id=batch.id if batch else None,
         facility_id=batch.facility_id if batch else None,
-        title=title,
-        description=description,
+        title=title.strip(),
+        description=description.strip(),
         category=category,
         reported_severity=reported_severity,
         place_of_purchase=place_of_purchase,
-        purchase_date=datetime.fromisoformat(purchase_date) if purchase_date else None,
-        date_of_issue=datetime.fromisoformat(date_of_issue) if date_of_issue else None,
+        purchase_date=purchase,
+        date_of_issue=issue_date,
         status="submitted"
     )
-    db.add(complaint)
-    db.flush()
-    
-    history = ComplaintStatusHistory(
-        complaint_id=complaint.id,
-        old_status=None,
-        new_status="submitted",
-        changed_by=current_user.email,
-        changed_by_role="customer",
-        notes="Complaint submitted by customer",
-        is_customer_visible=True
-    )
-    db.add(history)
-    
-    upload_errors = []
-    for file in files:
-        if not file.filename:
-            continue
-        ext = os.path.splitext(file.filename)[1].lower()
-        if ext not in ALLOWED_EXTENSIONS:
-            upload_errors.append(f"{file.filename}: Invalid file type")
-            continue
-        
-        content = await file.read()
-        if len(content) > settings.MAX_FILE_SIZE_MB * 1024 * 1024:
-            upload_errors.append(f"{file.filename}: File too large")
-            continue
-        
-        safe_name = f"{uuid.uuid4()}{ext}"
-        file_path = os.path.join(settings.UPLOAD_DIR, safe_name)
-        os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-        with open(file_path, "wb") as f:
-            f.write(content)
-        
-        attachment = ComplaintAttachment(
-            complaint_id=complaint.id,
-            filename=safe_name,
-            original_filename=file.filename,
-            file_path=file_path,
-            file_size=len(content),
-            content_type=file.content_type
-        )
-        db.add(attachment)
-
-    db.commit()
+    written: List[str] = []
+    upload_errors: List[str] = []
+    try:
+        db.add(complaint)
+        db.flush()
+        _assign_complaint_id(db, complaint)
+        db.add(ComplaintStatusHistory(
+            complaint_id=complaint.id, old_status=None, new_status="submitted",
+            changed_by=current_user.email, changed_by_role="customer",
+            notes="Complaint submitted by customer", is_customer_visible=True))
+        for file in files:
+            if not file.filename:
+                continue
+            attachment, warning = _store_upload(file, complaint.id, written)
+            if warning:
+                upload_errors.append(warning)
+            else:
+                db.add(attachment)
+        db.commit()
+    except Exception:
+        db.rollback()
+        for path in written:  # don't leave orphaned files behind a failed transaction
+            try:
+                os.remove(path)
+            except OSError:
+                logger.warning("Could not remove orphaned upload %s", path)
+        raise
     db.refresh(complaint)
 
     # Multilingual understanding + prediction runs after the response is sent.
@@ -219,13 +259,37 @@ def list_complaints(
         "pages": (total + per_page - 1) // per_page
     }
 
+def _owned_complaint(db: Session, complaint_id: str, user: User) -> Complaint:
+    """Customers may only see complaints they submitted. Anything else is a 404 (not 403),
+    so complaint IDs cannot be enumerated."""
+    complaint = db.query(Complaint).filter(Complaint.complaint_id == complaint_id).first()
+    if not complaint or complaint.submitted_by_user_id != user.id:
+        raise HTTPException(status_code=404, detail="Complaint not found")
+    return complaint
+
+
+@router.get("/{complaint_id}/attachments/{attachment_id}")
+def download_attachment(complaint_id: str, attachment_id: int,
+                        current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Authenticated attachment download: the complaint owner or an admin."""
+    complaint = db.query(Complaint).filter(Complaint.complaint_id == complaint_id).first()
+    is_admin = current_user.role in ("admin", "quality_manager")
+    if not complaint or (not is_admin and complaint.submitted_by_user_id != current_user.id):
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    att = db.query(ComplaintAttachment).filter(
+        ComplaintAttachment.id == attachment_id, ComplaintAttachment.complaint_id == complaint.id).first()
+    upload_root = os.path.realpath(settings.UPLOAD_DIR)
+    path = os.path.realpath(att.file_path) if att else ""
+    if not att or not path.startswith(upload_root + os.sep) or not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    return FileResponse(path, media_type=att.content_type, filename=att.original_filename,
+                        headers={"X-Content-Type-Options": "nosniff",
+                                 "Content-Security-Policy": "default-src 'none'; sandbox"})
+
+
 @router.get("/{complaint_id}")
 def get_complaint(complaint_id: str, current_user: User = Depends(get_current_customer), db: Session = Depends(get_db)):
-    complaint = db.query(Complaint).filter(Complaint.complaint_id == complaint_id).first()
-    if not complaint:
-        raise HTTPException(status_code=404, detail="Complaint not found")
-    if complaint.submitted_by_user_id and complaint.submitted_by_user_id != current_user.id and current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Access denied")
+    complaint = _owned_complaint(db, complaint_id, current_user)
     
     return {
         "id": complaint.id,
@@ -253,7 +317,7 @@ def get_complaint(complaint_id: str, current_user: User = Depends(get_current_cu
                 "file_size": a.file_size,
                 "content_type": a.content_type,
                 "uploaded_at": a.uploaded_at,
-                "url": f"/uploads/{a.filename}"
+                "url": f"/api/complaints/{complaint.complaint_id}/attachments/{a.id}"
             }
             for a in complaint.attachments
         ]
@@ -302,11 +366,7 @@ def submit_feedback(complaint_id: str, body: FeedbackRequest,
 
 @router.get("/{complaint_id}/timeline")
 def get_complaint_timeline(complaint_id: str, current_user: User = Depends(get_current_customer), db: Session = Depends(get_db)):
-    complaint = db.query(Complaint).filter(Complaint.complaint_id == complaint_id).first()
-    if not complaint:
-        raise HTTPException(status_code=404, detail="Complaint not found")
-    if complaint.submitted_by_user_id and complaint.submitted_by_user_id != current_user.id and current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Access denied")
+    complaint = _owned_complaint(db, complaint_id, current_user)
     
     status_map = {
         "submitted": 1,

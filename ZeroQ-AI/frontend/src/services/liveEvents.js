@@ -1,14 +1,13 @@
 // Real-time event client (single shared WebSocket per tab).
 // - Authenticates with the JWT in the first message (token never goes in the URL).
-// - Reconnects with capped exponential backoff.
+// - Reconnects with capped exponential backoff plus jitter.
 // - Drops duplicate events by event_id.
 // - Emits a synthetic "connection.resync" event after a reconnect so views re-fetch
 //   anything they may have missed while offline (the API is the source of truth).
 
-const RECONNECT_BASE_MS = 1000
-const RECONNECT_MAX_MS = 15000
+import { reconnectDelay, createDeduper, UNAUTHORIZED_CLOSE } from './liveEventsCore'
+
 const HEARTBEAT_MS = 25000
-const SEEN_LIMIT = 500
 
 let socket = null
 let attempts = 0
@@ -18,21 +17,11 @@ let hasConnectedBefore = false
 let status = 'idle'
 const handlers = new Set()
 const statusListeners = new Set()
-const seen = []
-const seenSet = new Set()
+const deduper = createDeduper()
 
 function setStatus(next) {
   status = next
   statusListeners.forEach(fn => fn(next))
-}
-
-function remember(id) {
-  if (!id) return false
-  if (seenSet.has(id)) return true
-  seen.push(id)
-  seenSet.add(id)
-  if (seen.length > SEEN_LIMIT) seenSet.delete(seen.shift())
-  return false
 }
 
 function emit(event) {
@@ -48,7 +37,7 @@ function socketUrl() {
 
 function scheduleReconnect() {
   if (reconnectTimer || handlers.size === 0) return
-  const delay = Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** attempts)
+  const delay = reconnectDelay(attempts)
   attempts += 1
   reconnectTimer = setTimeout(() => { reconnectTimer = null; connect() }, delay)
 }
@@ -73,13 +62,14 @@ function connect() {
       heartbeatTimer = setInterval(() => ws.readyState === 1 && ws.send('ping'), HEARTBEAT_MS)
       return
     }
-    if (remember(event.event_id)) return
+    if (deduper.seen(event.event_id)) return
     emit(event)
   }
   ws.onclose = (ev) => {
     clearInterval(heartbeatTimer)
     socket = null
-    if (ev.code === 4401) { setStatus('unauthorized'); return }
+    // Rejected or expired token: stop retrying; the next API call will route to login.
+    if (ev.code === UNAUTHORIZED_CLOSE) { setStatus('unauthorized'); return }
     setStatus('offline')
     scheduleReconnect()
   }

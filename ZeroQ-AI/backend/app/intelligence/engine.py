@@ -100,7 +100,8 @@ def _rules_prediction(symptoms: List[dict]) -> Optional[dict]:
 
 def run_analysis(db: Session, complaint: Complaint, allow_llm: bool = True) -> IssueAnalysis:
     text = compose_text(complaint)
-    u = understand(text, allow_llm=allow_llm)
+    llm_usage: list = []
+    u = understand(text, allow_llm=allow_llm, usage_log=llm_usage)
     english = u["english_text"]
     symptoms = u["symptoms"]
 
@@ -131,7 +132,7 @@ def run_analysis(db: Session, complaint: Complaint, allow_llm: bool = True) -> I
                 llm_out = llm.analyze_issue(
                     u["original_text"], english, u["language"]["name"],
                     [s["symptom"] for s in symptoms], search["incidents"],
-                    complaint.product.name if complaint.product else None)
+                    complaint.product.name if complaint.product else None, usage_log=llm_usage)
             except llm.LLMUnavailable as exc:
                 reasons.append(f"LLM unavailable: {exc}")
         if llm_out is not None:
@@ -147,14 +148,23 @@ def run_analysis(db: Session, complaint: Complaint, allow_llm: bool = True) -> I
                 source, category, subcategory = "rules", rules["category"], rules["subcategory"]
                 confidence = rules["confidence"]
                 recommendation = " ".join(rules["checks"])
-        if source != "ml" and subcategory != ml["subcategory"]:
+            elif low_conf and ml["category_confidence"] < settings.ML_MIN_GUESS_CONFIDENCE:
+                # Nothing supports a category (weak ML guess, no LLM, no symptom rule):
+                # leave it undetermined for the admin instead of presenting a guess.
+                source, category, subcategory = "undetermined", None, None
+                reasons.append("no reliable prediction: left undetermined for admin assessment")
+        if allow_llm and not llm.is_configured():
+            reasons.append("LLM fallback not configured")
+        if source not in ("ml", "undetermined") and subcategory != ml["subcategory"]:
             search = index.search(english, subcategory=subcategory, product_id=complaint.product_id,
                                   exclude_complaint_pk=complaint.id, category=category)
 
-    evidence = search["evidence"]
+    undetermined = source == "undetermined"
+    evidence = {"root_causes": [], "resolutions": [], "severity_distribution": {}} if undetermined         else search["evidence"]
     # Historical root causes / actions count as evidence only when comparable incidents
     # (same category, similar enough text) exist; otherwise recommend symptom checks.
-    comparable = search["category_matches"] > 0 and search["best_similarity"] >= settings.MIN_HISTORICAL_SIMILARITY
+    comparable = (not undetermined and search["category_matches"] > 0
+                  and search["best_similarity"] >= settings.MIN_HISTORICAL_SIMILARITY)
     if root_cause is None and comparable:
         root_cause = evidence["root_causes"][0]["root_cause"] if evidence["root_causes"] else None
     if recommendation is None:
@@ -163,10 +173,15 @@ def run_analysis(db: Session, complaint: Complaint, allow_llm: bool = True) -> I
         elif evidence["resolutions"]:
             recommendation = evidence["resolutions"][0]["action"]
     severity, severity_basis = assess_severity(evidence, category, english, batch_risk)
-    if llm_result and SEVERITIES.index(llm_result["severity"]) > SEVERITIES.index(severity):
+    if undetermined and len(severity_basis) == 1:
+        # Only the "no evidence" default fired — don't present a guessed severity.
+        severity, severity_basis = None, ["Not assessed: no evidence for a severity"]
+    if llm_result and severity and SEVERITIES.index(llm_result["severity"]) > SEVERITIES.index(severity):
         severity = llm_result["severity"]
         severity_basis.append(f"LLM assessed {severity}")
 
+    if llm_usage:  # token usage + cost estimate for every LLM call made for this complaint
+        llm_result = {**(llm_result or {}), "usage": llm_usage}
     products = u["entities"].get("products") or []
     affected = complaint.product.name if complaint.product else (products[0] if products else None)
     fields = dict(

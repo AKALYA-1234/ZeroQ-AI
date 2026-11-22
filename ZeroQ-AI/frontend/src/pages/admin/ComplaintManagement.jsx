@@ -13,6 +13,18 @@ import { SourceBadge } from '../../components/intelligence/ui'
 
 const SEVERITY_STYLES = { critical: 'bg-red-100 text-red-700 border-red-200', high: 'bg-orange-100 text-orange-700 border-orange-200', medium: 'bg-amber-100 text-amber-700 border-amber-200', low: 'bg-green-100 text-green-700 border-green-200' }
 const STATUS_STYLES = { submitted: 'bg-blue-100 text-blue-700', under_review: 'bg-amber-100 text-amber-700', investigating: 'bg-purple-100 text-purple-700', resolved: 'bg-green-100 text-green-700', rejected: 'bg-gray-100 text-gray-600' }
+// Attachments are private: fetch with the admin's token and open a local blob URL.
+async function openAttachment(complaintId, att) {
+  try {
+    const res = await api.get(`/api/complaints/${complaintId}/attachments/${att.id}`, { responseType: 'blob' })
+    const url = URL.createObjectURL(res.data)
+    window.open(url, '_blank', 'noopener')
+    setTimeout(() => URL.revokeObjectURL(url), 60000)
+  } catch {
+    window.alert('Could not open the attachment.')
+  }
+}
+
 const BORDER_COLORS = { critical: 'border-l-red-500', high: 'border-l-orange-500', medium: 'border-l-amber-500', low: 'border-l-green-500' }
 
 function Badge({ children, className }) { return <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${className}`}>{children}</span> }
@@ -517,7 +529,11 @@ export default function ComplaintManagement() {
                                 <div className="text-xs font-medium text-gray-700">{att.original_filename}</div>
                                 <div className="text-[10px] text-gray-400">{(att.file_size / 1024).toFixed(1)} KB</div>
                               </div>
-                              <Eye size={14} className="text-teal-600 cursor-pointer" />
+                              <button type="button" onClick={() => openAttachment(detail.complaint_id, att)}
+                                aria-label={`Open ${att.original_filename}`}
+                                className="p-1 rounded text-teal-600 hover:bg-teal-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500">
+                                <Eye size={14} aria-hidden="true" />
+                              </button>
                             </div>
                           ))}
                         </div>

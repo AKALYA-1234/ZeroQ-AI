@@ -19,3 +19,7 @@ data/raw/*
 .vscode/
 *.log
 
+.venv/
+*.db-wal
+*.db-shm
+models/trained/issue_classifier/*.eval.json

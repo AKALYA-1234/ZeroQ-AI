@@ -6,7 +6,7 @@ from datetime import datetime
 
 from app.database.connection import get_db
 from app.core.dependencies import get_current_customer
-from app.core.security import verify_password, get_password_hash
+from app.core.security import verify_password, get_password_hash, password_policy_error
 from app.models.user import User
 from app.models.notification import CustomerProfile, ModelPrediction
 from app.schemas.customer import CustomerProfileUpdate, CustomerProfileResponse, PasswordChange, NotificationPreferences
@@ -73,8 +73,9 @@ def change_password(
 ):
     if not verify_password(pw_data.current_password, current_user.hashed_password):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
-    if len(pw_data.new_password) < 8:
-        raise HTTPException(status_code=400, detail="New password must be at least 8 characters")
+    reason = password_policy_error(pw_data.new_password)
+    if reason:
+        raise HTTPException(status_code=400, detail=reason)
     
     current_user.hashed_password = get_password_hash(pw_data.new_password)
     db.commit()

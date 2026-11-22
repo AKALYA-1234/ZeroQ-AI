@@ -52,9 +52,17 @@ function Prediction({ a }) {
         </p>
       )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Field label="Predicted issue">{a.predicted_category}{a.predicted_subcategory && <span className="text-gray-500"> › {a.predicted_subcategory}</span>}</Field>
-        <Field label="Severity / priority"><SeverityBadge level={a.predicted_severity} /></Field>
-        <Field label="Probable root cause">{a.predicted_root_cause}</Field>
+        <Field label="Predicted issue">
+          {a.predicted_category
+            ? <>{a.predicted_category}{a.predicted_subcategory && <span className="text-gray-500"> › {a.predicted_subcategory}</span>}</>
+            : <span className="text-gray-600">Undetermined — needs admin assessment</span>}
+        </Field>
+        <Field label="Severity / priority">
+          {a.predicted_severity ? <SeverityBadge level={a.predicted_severity} /> : <span className="text-gray-600">Not assessed</span>}
+        </Field>
+        <Field label="Probable root cause">
+          {a.predicted_root_cause || <span className="text-gray-600">Undetermined — no comparable verified incident</span>}
+        </Field>
         <Field label="Affected product">{a.affected_product}</Field>
         <div className="sm:col-span-2"><Field label="Recommended action">{a.recommended_resolution}</Field></div>
       </div>
@@ -94,7 +102,7 @@ function VerifiedResolution({ r }) {
         <Field label="Root cause">{r.confirmed_root_cause}</Field>
         <Field label="Resolution">{r.resolution_action}</Field>
         <div className="sm:col-span-2"><Field label="Customer explanation">{r.admin_explanation}</Field></div>
-        <Field label="Units contained">{r.units_contained}</Field>
+        <Field label="Units contained">{r.units_contained}{r.units_at_risk != null && <span className="text-gray-500"> of {r.units_at_risk} at risk</span>}</Field>
         <Field label="Downtime avoided">{r.downtime_avoided_hours} h</Field>
         <Field label="Resolved by">{r.resolved_by}</Field>
         <Field label="Resolved at">{r.resolved_at && new Date(r.resolved_at).toLocaleString()}</Field>
@@ -173,12 +181,13 @@ export default function IncidentVerificationPanel({ complaintId, onResolved }) {
             <RootCauseEvidence distribution={a.root_cause_distribution} />
             <ResolutionEvidence options={a.resolution_options} />
           </div>
-          <SimilarIncidents incidents={a.similar_incidents} />
+          <SimilarIncidents incidents={a.similar_incidents} minSimilarity={config?.min_historical_similarity} />
         </>
       )}
       {data.resolution
         ? <VerifiedResolution r={data.resolution} />
         : <ResolutionForm complaintId={complaintId} analysis={a?.status === 'completed' ? a : null} config={config}
+            expectedVersion={data.version} onStale={load}
             onResolved={() => { load(); onResolved?.() }} />}
     </div>
   )

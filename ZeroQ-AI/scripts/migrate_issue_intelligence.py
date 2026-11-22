@@ -15,6 +15,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 
 from app.database.connection import SessionLocal, engine
+from app.database.migrations import apply_additive_migrations
 from app.models.intelligence import IncidentResolution, IssueAnalysis, ModelTrainingRun, ResolutionFeedback
 from app.intelligence import classifier
 from app.intelligence.learning import retrain
@@ -28,6 +29,8 @@ def main() -> None:
     for table in TABLES:
         table.create(bind=engine, checkfirst=True)
         print(f"  ok  {table.name}")
+    for applied in apply_additive_migrations(engine):
+        print(f"  added column {applied}")
     db = SessionLocal()
     try:
         if classifier.load_active() is None:

@@ -115,7 +115,7 @@ export default function AdminLayout() {
       )}
 
       {/* Main content */}
-      <main className={`flex-1 ${sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} transition-all duration-300`}>
+      <main className={`flex-1 min-w-0 ${sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} transition-all duration-300`}>
         {/* Top Header */}
         <header className="bg-white border-b border-gray-200 sticky top-0 z-20">
           <div className="flex items-center justify-between px-4 lg:px-6 h-14">

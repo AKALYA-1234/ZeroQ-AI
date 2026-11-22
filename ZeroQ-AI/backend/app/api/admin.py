@@ -17,7 +17,7 @@ from app.ml.model_service import (
 )
 from app.schemas.complaint import ComplaintStatusUpdate
 from app.intelligence.realtime import broker, complaint_event_payload
-from app.models.intelligence import IssueAnalysis
+from app.models.intelligence import IssueAnalysis, IncidentResolution
 
 router = APIRouter()
 
@@ -452,6 +452,11 @@ def update_complaint(
 
     old_status = complaint.status
     changes: dict = {}
+    if update_data.status and update_data.status != "resolved" and db.query(IncidentResolution.id).filter(
+            IncidentResolution.complaint_id == complaint.id).first():
+        # Verified resolutions are ground truth for analytics and training; reopening would leave
+        # a "resolved" record behind an open complaint.
+        raise HTTPException(status_code=409, detail="This complaint has a verified resolution and cannot be reopened")
 
     if update_data.status:
         complaint.status = update_data.status

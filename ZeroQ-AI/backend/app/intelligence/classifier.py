@@ -19,6 +19,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import FeatureUnion, Pipeline
 
+from app.intelligence.evaluation import softmax
 from app.intelligence.taxonomy import category_for
 
 DEFAULT_MODEL_DIR = os.path.abspath(os.path.join(
@@ -57,31 +58,17 @@ class IssueClassifier:
                 "classes": list(pipeline.classes_), **(metadata or {})}
         return cls(pipeline, meta)
 
+    @property
+    def temperature(self) -> float:
+        return float(self.metadata.get("temperature", 1.0))
+
+    def decision_scores(self, texts: List[str]) -> np.ndarray:
+        return self.pipeline.decision_function([(t or "").lower() for t in texts])
+
     def predict(self, text: str) -> dict:
-        probs = self.pipeline.predict_proba([(text or "").lower()])[0]
-        classes = list(self.pipeline.classes_)
-        order = np.argsort(probs)[::-1]
-        cat_probs: Dict[str, float] = {}
-        for cls_name, p in zip(classes, probs):
-            cat = category_for(cls_name, default=cls_name)
-            cat_probs[cat] = cat_probs.get(cat, 0.0) + float(p)
-        best_cat = max(cat_probs, key=cat_probs.get)
-        # Best subcategory *within* the best category keeps the pair consistent.
-        in_cat = [i for i in order if category_for(classes[i], default=classes[i]) == best_cat]
-        best_sub = classes[in_cat[0]]
-        return {
-            "category": best_cat,
-            "category_confidence": round(cat_probs[best_cat], 4),
-            "subcategory": best_sub if best_sub != best_cat else None,
-            "subcategory_confidence": round(float(probs[in_cat[0]]), 4),
-            "top_subcategories": [
-                {"label": classes[i], "probability": round(float(probs[i]), 4)} for i in order[:TOP_K]
-            ],
-            "category_probabilities": {
-                k: round(v, 4) for k, v in sorted(cat_probs.items(), key=lambda kv: -kv[1])[:5]
-            },
-            "model_version": self.version,
-        }
+        out = decide(list(self.pipeline.classes_), self.decision_scores([text])[0], self.temperature)
+        out.update({"model_version": self.version, "temperature": self.temperature})
+        return out
 
     # ── persistence ─────────────────────────────────────────────────────
     def save(self, model_dir: Optional[str] = None) -> str:
@@ -128,6 +115,49 @@ def load_active(model_dir: Optional[str] = None) -> Optional[IssueClassifier]:
         return clf
 
 
+def save_evaluation(version: str, metrics: dict, model_dir: Optional[str] = None) -> str:
+    """Persist the full evaluation record next to the artifact (kept for rejected candidates too)."""
+    model_dir = model_dir or MODEL_DIR
+    os.makedirs(model_dir, exist_ok=True)
+    path = os.path.join(model_dir, f"{version}.eval.json")
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(metrics, fh, ensure_ascii=False, indent=1, default=str)
+    return path
+
+
 def clear_cache() -> None:
     with _lock:
         _active_cache.clear()
+
+
+def _category_mass(classes: List[str], probs: np.ndarray) -> Dict[str, float]:
+    mass: Dict[str, float] = {}
+    for cls_name, p in zip(classes, probs):
+        cat = category_for(cls_name, default=cls_name)
+        mass[cat] = mass.get(cat, 0.0) + float(p)
+    return mass
+
+
+def decide(classes: List[str], scores: np.ndarray, temperature: float = 1.0) -> dict:
+    """Category / subcategory decision plus calibrated confidence.
+
+    The *decision* uses the unscaled model probabilities (T=1): temperature scaling must
+    calibrate confidence without changing what is predicted, and because category
+    probability is a sum over subcategories, sharpening could otherwise flip the category.
+    The reported confidences use the temperature-scaled probabilities."""
+    raw = softmax(scores)
+    cal = softmax(scores / temperature)
+    raw_mass, cal_mass = _category_mass(classes, raw), _category_mass(classes, cal)
+    best_cat = max(raw_mass, key=raw_mass.get)
+    order = np.argsort(raw)[::-1]
+    in_cat = [i for i in order if category_for(classes[i], default=classes[i]) == best_cat]
+    best_sub = classes[in_cat[0]]       # best subcategory *within* the chosen category
+    cal_order = np.argsort(cal)[::-1]
+    return {
+        "category": best_cat,
+        "category_confidence": round(cal_mass[best_cat], 4),
+        "subcategory": best_sub if best_sub != best_cat else None,
+        "subcategory_confidence": round(float(cal[in_cat[0]]), 4),
+        "top_subcategories": [{"label": classes[i], "probability": round(float(cal[i]), 4)} for i in cal_order[:TOP_K]],
+        "category_probabilities": {k: round(v, 4) for k, v in sorted(cal_mass.items(), key=lambda kv: -kv[1])[:5]},
+    }
