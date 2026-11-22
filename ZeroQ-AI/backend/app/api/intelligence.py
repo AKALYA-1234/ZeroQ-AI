@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -20,7 +21,9 @@ from app.database.connection import get_db
 from app.intelligence import llm
 from app.intelligence.engine import analyze_text_preview, run_analysis
 from app.intelligence.impact import assumptions, compute_kpis, compute_trends
+from app.intelligence.monitoring import compute_monitoring, render_markdown_report
 from app.intelligence.learning import NotEnoughVerifiedData, learning_status, retrain
+from app.intelligence.origin import complaint_origin
 from app.intelligence.realtime import broker, complaint_event_payload
 from app.intelligence.retrieval import get_index, invalidate_index
 from app.intelligence.taxonomy import CATEGORIES, SUBCATEGORY_TO_CATEGORY
@@ -190,36 +193,56 @@ LLM_USAGE_WINDOW_DAYS = 30
 
 @router.get("/llm/status")
 def get_llm_status(current_user=Depends(get_current_admin), db: Session = Depends(get_db)):
-    """Operational view of the LLM fallback. Never returns credentials."""
+    """Operational view of the LLM fallback chain. Never returns credentials."""
     since = datetime.utcnow() - timedelta(days=LLM_USAGE_WINDOW_DAYS)
     rows = db.query(IssueAnalysis.llm_result).filter(
         IssueAnalysis.llm_result.isnot(None), IssueAnalysis.created_at >= since).all()
-    totals = {"calls": 0, "input_tokens": 0, "output_tokens": 0, "estimated_cost_usd": 0.0}
-    by_op: dict = {}
+    totals = {"calls": 0, "failed_calls": 0, "input_tokens": 0, "output_tokens": 0,
+              "estimated_cost_usd": 0.0, "calls_with_unknown_cost": 0}
+    by_provider: dict = {}
     for (res,) in rows:
         for u in (res or {}).get("usage", []):
+            name = u.get("provider", "anthropic")
+            bp = by_provider.setdefault(name, {"calls": 0, "failed_calls": 0, "input_tokens": 0, "output_tokens": 0,
+                                               "latency_ms_total": 0, "billing": {}, "errors": {}})
+            if u.get("status") == "error":
+                totals["failed_calls"] += 1
+                bp["failed_calls"] += 1
+                bp["errors"][u.get("error", "unknown")] = bp["errors"].get(u.get("error", "unknown"), 0) + 1
+                continue
             totals["calls"] += 1
-            totals["input_tokens"] += u.get("input_tokens", 0)
-            totals["output_tokens"] += u.get("output_tokens", 0)
-            totals["estimated_cost_usd"] += u.get("estimated_cost_usd", 0.0)
-            op = by_op.setdefault(u.get("operation", "unknown"), {"calls": 0, "latency_ms_total": 0})
-            op["calls"] += 1
-            op["latency_ms_total"] += u.get("latency_ms", 0)
-    for op in by_op.values():
-        op["avg_latency_ms"] = round(op.pop("latency_ms_total") / op["calls"]) if op["calls"] else None
-    totals["estimated_cost_usd"] = round(totals["estimated_cost_usd"], 4)
+            bp["calls"] += 1
+            for k in ("input_tokens", "output_tokens"):
+                totals[k] += u.get(k, 0)
+                bp[k] += u.get(k, 0)
+            bp["latency_ms_total"] += u.get("latency_ms", 0)
+            billing = u.get("billing", "paid")
+            bp["billing"][billing] = bp["billing"].get(billing, 0) + 1
+            if u.get("estimated_cost_usd") is None:
+                totals["calls_with_unknown_cost"] += 1
+            else:
+                totals["estimated_cost_usd"] += u["estimated_cost_usd"]
+    for bp in by_provider.values():
+        bp["avg_latency_ms"] = round(bp.pop("latency_ms_total") / bp["calls"]) if bp["calls"] else None
+    totals["known_cost_subtotal_usd"] = round(totals.pop("estimated_cost_usd"), 4)
+    # Complete only if every successful call had a price (free-tier calls count as known: $0).
+    totals["estimated_cost_usd"] = totals["known_cost_subtotal_usd"] if not totals["calls_with_unknown_cost"] else None
+    configured = llm.is_configured()
     return {
-        "configured": llm.is_configured(),
+        "configured": configured,
         "enabled": settings.LLM_ENABLED,
-        "model": settings.LLM_MODEL,
+        "order": llm.provider_order(),
+        "failover_enabled": settings.LLM_FAILOVER_ENABLED,
+        "providers": llm.provider_status(),
+        "model": next((p["model"] for p in llm.provider_status() if p["configured"]), None),
         "circuit": llm.circuit_status(),
         "usage_window_days": LLM_USAGE_WINDOW_DAYS,
         "usage": totals,
-        "by_operation": by_op,
-        "pricing_note": (f"Cost is an estimate at list price ${settings.LLM_INPUT_PRICE_PER_MTOK}/"
-                         f"${settings.LLM_OUTPUT_PRICE_PER_MTOK} per million input/output tokens."),
-        "setup_required": None if llm.is_configured() else
-        "Set ANTHROPIC_API_KEY in the backend environment (and keep LLM_ENABLED=true) to enable the LLM fallback.",
+        "by_provider": by_provider,
+        "pricing_note": ("Costs are estimates. free_tier = model id ends with ':free' (provider rate limits apply); "
+                         "unknown = no price configured (set <PROVIDER>_INPUT/OUTPUT_PRICE_PER_MTOK)."),
+        "setup_required": None if configured else
+        "Set GROQ_API_KEY / OPENROUTER_API_KEY (or ANTHROPIC_API_KEY) in .env to enable the LLM fallback.",
     }
 
 
@@ -232,6 +255,7 @@ def get_incident(complaint_id: str, current_user=Depends(get_current_admin), db:
         "complaint_id": complaint.complaint_id,
         "status": complaint.status,
         "record_type": complaint.record_type,
+        "data_origin": complaint_origin(complaint.customer_id, complaint.data_origin),
         "title": complaint.title,
         "description": complaint.description,
         "category": complaint.category,
@@ -383,7 +407,7 @@ def _parse_date(value: Optional[str], end_of_day: bool = False) -> Optional[date
     return d.replace(hour=23, minute=59, second=59) if end_of_day and len(value) <= 10 else d
 
 
-SCOPE_PATTERN = "^(live|imported|all)$"
+SCOPE_PATTERN = "^(live|test|imported|all)$"
 
 
 @router.get("/kpis")
@@ -400,6 +424,24 @@ def trends(start: Optional[str] = Query(None), end: Optional[str] = Query(None),
            scope: str = Query("live", pattern=SCOPE_PATTERN),
            current_user=Depends(get_current_admin), db: Session = Depends(get_db)):
     return compute_trends(db, _parse_date(start), _parse_date(end, True), category or None, scope)
+
+
+# ── real-world monitoring ─────────────────────────────────────────────────
+
+@router.get("/monitoring")
+def get_monitoring(start: Optional[str] = Query(None), end: Optional[str] = Query(None),
+                   scope: str = Query("live", pattern=SCOPE_PATTERN),
+                   current_user=Depends(get_current_admin), db: Session = Depends(get_db)):
+    return compute_monitoring(db, _parse_date(start), _parse_date(end, True), scope)
+
+
+@router.get("/monitoring/report", response_class=PlainTextResponse)
+def get_monitoring_report(start: Optional[str] = Query(None), end: Optional[str] = Query(None),
+                          scope: str = Query("live", pattern=SCOPE_PATTERN),
+                          current_user=Depends(get_current_admin), db: Session = Depends(get_db)):
+    """Markdown report generated from verified incidents. Read-only: never triggers retraining."""
+    metrics = compute_monitoring(db, _parse_date(start), _parse_date(end, True), scope)
+    return PlainTextResponse(render_markdown_report(metrics), media_type="text/markdown; charset=utf-8")
 
 
 # ── learning ──────────────────────────────────────────────────────────────

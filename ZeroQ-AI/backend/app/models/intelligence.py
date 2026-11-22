@@ -40,7 +40,7 @@ class IssueAnalysis(Base):
     recommended_resolution = Column(Text, nullable=True)
     confidence = Column(Float, nullable=True)
     is_low_confidence = Column(Boolean, default=False, index=True)
-    fallback_reason = Column(String(255), nullable=True)
+    fallback_reason = Column(Text, nullable=True)   # joined reasons can exceed 255 chars
 
     # Evidence
     ml_result = Column(JSON, nullable=True)

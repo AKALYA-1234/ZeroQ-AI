@@ -19,15 +19,12 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.intelligence.classifier import load_active
+from app.intelligence.origin import ORIGIN_SQL
 
 REPEAT_WINDOW_DAYS = 90
 REPEAT_MIN_SAMPLE = 30          # complaints per window needed before a repeat-rate comparison is shown
 YEARLY_GRANULARITY_MONTHS = 36
-SCOPES = {
-    "live": "c.customer_id IS NULL",
-    "imported": "c.customer_id IS NOT NULL",
-    "all": "1 = 1",
-}
+SCOPES = ORIGIN_SQL   # live | test | imported | all  (see origin.py)
 METRIC_BASIS = {
     "products_saved_units": "admin_reported",
     "wastage_reduction_pct": "admin_reported",
@@ -238,9 +235,9 @@ def assumptions() -> list:
     unit = settings.IMPACT_UNIT_COST_INR
     hour = settings.IMPACT_DOWNTIME_COST_PER_HOUR_INR
     return [
-        {"metric": "Data scope", "definition": "Live = complaints submitted on the platform. Imported = the "
-         "historical/synthetic dataset loaded at setup (rows carrying a dataset customer_id). Live is the default; "
-         "imported data is never mixed into live figures."},
+        {"metric": "Data scope", "definition": "Live = complaints from real customers submitted on the platform "
+         "(default). Test = submissions from designated test/demo accounts. Imported = the historical/synthetic "
+         "dataset loaded at setup (rows carrying a dataset customer_id). Scopes are never mixed unless 'all' is chosen."},
         {"metric": "Products saved", "definition": "Sum of units the admin recorded as contained / quarantined "
          "when resolving an incident (admin-reported). Never inferred."},
         {"metric": "Wastage reduction %", "definition": "Units contained ÷ units at risk, over resolutions where "

@@ -3,6 +3,9 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { Eye, EyeOff, AlertCircle, Loader2, Zap } from 'lucide-react'
 
+// Demo accounts are advertised only in development builds (or when explicitly enabled at build time).
+const SHOW_DEMO_CREDENTIALS = import.meta.env.DEV || import.meta.env.VITE_SHOW_DEMO_CREDENTIALS === 'true'
+
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -80,6 +83,7 @@ export default function LoginPage() {
             </p>
           </div>
 
+          {SHOW_DEMO_CREDENTIALS && (
           <div className="mt-6 p-4 bg-teal-50 rounded-lg border border-teal-100">
             <p className="text-xs font-semibold text-teal-700 mb-2">Demo Credentials</p>
             <div className="text-xs text-teal-600 space-y-1">
@@ -87,6 +91,7 @@ export default function LoginPage() {
               <p><span className="font-medium">Admin:</span> admin@zeroq.com / AdminZeroQ2024!</p>
             </div>
           </div>
+          )}
         </div>
       </div>
     </div>

@@ -2,6 +2,10 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import jwt  # PyJWT (python-jose is unmaintained and has an unpatched advisory)
+
+# Tolerated clock difference between the host that issued a token and the one validating it
+# (VM clock steps, several hosts behind a load balancer). Applies to iat and exp.
+CLOCK_SKEW_LEEWAY_SECONDS = 30
 import bcrypt
 from app.core.config import settings
 
@@ -30,7 +34,7 @@ def decode_token(token: str) -> Optional[dict]:
     try:
         # Only the configured algorithm is accepted (no "none", no algorithm confusion); exp is required.
         return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM],
-                          options={"require": ["exp", "sub"]})
+                          options={"require": ["exp", "sub"]}, leeway=CLOCK_SKEW_LEEWAY_SECONDS)
     except jwt.PyJWTError:
         return None
 

@@ -18,6 +18,7 @@ from app.ml.model_service import (
 from app.schemas.complaint import ComplaintStatusUpdate
 from app.intelligence.realtime import broker, complaint_event_payload
 from app.models.intelligence import IssueAnalysis, IncidentResolution
+from app.intelligence.origin import complaint_origin
 
 router = APIRouter()
 
@@ -105,6 +106,7 @@ def _complaint_summary(c: Complaint) -> dict:
         "id": c.id,
         "complaint_id": c.complaint_id,
         "record_type": c.record_type,
+        "data_origin": complaint_origin(c.customer_id, c.data_origin),
         "customer_name": c.customer_name,
         "customer_email": c.customer_email,
         "product_name": c.product.name if c.product else "Unknown",

@@ -1,0 +1,24 @@
+# Build context = repository root. Keep the context to what the backend image copies.
+.git
+.playwright-mcp
+**/node_modules
+**/__pycache__
+**/*.pyc
+**/*.db
+**/*.db-wal
+**/*.db-shm
+**/.env
+**/.env.*
+Model/raw_data
+Model/processed_data
+Model/visualizations
+Model/preprocessing
+Model/model_training/logistic_regression_optimized
+Model/model_training/xgboost_optimized
+ZeroQ-AI/frontend
+ZeroQ-AI/tests
+ZeroQ-AI/docs
+ZeroQ-AI/data
+ZeroQ-AI/deploy
+ZeroQ-AI/backend/uploads
+ZeroQ-AI/models/trained/issue_classifier

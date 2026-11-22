@@ -23,3 +23,6 @@ data/raw/*
 *.db-wal
 *.db-shm
 models/trained/issue_classifier/*.eval.json
+
+# deployment secrets
+deploy/.env.pilot

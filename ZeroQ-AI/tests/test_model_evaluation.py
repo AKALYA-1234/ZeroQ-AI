@@ -88,3 +88,13 @@ def test_temperature_changes_confidence_but_never_the_decision():
     assert base["category"] == "Packaging Defect"
     assert (sharp["category"], sharp["subcategory"]) == (base["category"], base["subcategory"])
     assert sharp["category_confidence"] != base["category_confidence"]
+
+
+def test_wilson_interval_known_values_and_small_sample_width():
+    from app.intelligence.evaluation import wilson_interval
+    assert wilson_interval(0, 0) is None
+    lo, hi = wilson_interval(8, 10)               # 80% of 10: textbook Wilson ≈ [49.0, 94.3]
+    assert abs(lo - 49.0) < 0.2 and abs(hi - 94.3) < 0.2
+    lo2, hi2 = wilson_interval(80, 100)           # same rate, 10x the data → much tighter
+    assert (hi2 - lo2) < (hi - lo) / 2
+    assert wilson_interval(10, 10)[1] == 100.0 and wilson_interval(0, 10)[0] == 0.0

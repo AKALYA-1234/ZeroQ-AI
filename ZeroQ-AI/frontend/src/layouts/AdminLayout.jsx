@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import {
   Zap, LogOut, LayoutDashboard, FileText, BarChart2,
   GitBranch, AlertTriangle, Brain, Wrench, Search, Bell,
-  ChevronRight, Home, Settings, User, Menu, X, ExternalLink, Sparkles
+  ChevronRight, Home, Settings, User, Menu, X, ExternalLink, Sparkles, Activity
 } from 'lucide-react'
 
 const navItems = [
@@ -15,6 +15,7 @@ const navItems = [
   { path: '/admin/risk-assessment', label: 'Risk Assessment', icon: AlertTriangle },
   { path: '/admin/ai-prediction', label: 'AI Prediction Center', icon: Brain },
   { path: '/admin/ai-insights', label: 'AI Insights & Impact', icon: Sparkles },
+  { path: '/admin/ai-monitoring', label: 'Model Monitoring', icon: Activity },
   { path: '/admin/capa', label: 'CAPA Management', icon: Wrench },
 ]
 
@@ -26,6 +27,7 @@ const pageTitles = {
   '/admin/risk-assessment': { title: 'Risk Assessment', desc: 'Evaluate and monitor risk levels across products, batches and manufacturing processes.' },
   '/admin/ai-prediction': { title: 'AI Prediction Center', desc: 'Machine learning-powered predictions and forecasting for proactive complaint management.' },
   '/admin/ai-insights': { title: 'AI Insights & Impact', desc: 'Multilingual AI issue prediction performance, verified learning, and measured business impact.' },
+  '/admin/ai-monitoring': { title: 'Model Monitoring', desc: 'Real-world prediction accuracy from admin-verified incidents: per-category precision and recall, languages, fallback rates and new issue types.' },
   '/admin/capa': { title: 'CAPA Management', desc: 'Track and manage Corrective and Preventive Actions to drive continuous improvement.' },
 }
 

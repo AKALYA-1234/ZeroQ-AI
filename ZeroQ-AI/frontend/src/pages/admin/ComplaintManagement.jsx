@@ -289,6 +289,12 @@ export default function ComplaintManagement() {
                   </div>
                   <div className="text-xs font-medium text-gray-800">{c.product_name || 'Unknown Product'}</div>
                   <div className="text-[10px] text-gray-500 mt-0.5">{c.category || 'N/A'}</div>
+                  {(c.data_origin === 'synthetic' || c.data_origin === 'test') && (
+                    <span className={`inline-block mt-1 mr-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${c.data_origin === 'test' ? 'bg-violet-100 text-violet-800' : 'bg-slate-100 text-slate-600'}`}
+                      title={c.data_origin === 'test' ? 'Submitted by a test account — excluded from real-world metrics and training' : 'Imported synthetic record'}>
+                      {c.data_origin === 'test' ? 'TEST' : 'SYNTHETIC'}
+                    </span>
+                  )}
                   {c.ai && (
                     <div className="flex flex-wrap items-center gap-1 mt-1">
                       <SourceBadge source={c.ai.source} />

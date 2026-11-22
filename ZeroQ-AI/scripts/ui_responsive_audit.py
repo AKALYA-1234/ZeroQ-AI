@@ -20,7 +20,7 @@ from playwright.sync_api import sync_playwright
 WIDTHS = [390, 768, 1440]
 CUSTOMER_PAGES = ["/customer/home", "/customer/submit-complaint", "/customer/track-complaint",
                   "/customer/my-complaints"]
-ADMIN_PAGES = ["/admin/dashboard", "/admin/complaints", "/admin/ai-insights", "/admin/ai-prediction",
+ADMIN_PAGES = ["/admin/dashboard", "/admin/complaints", "/admin/ai-insights", "/admin/ai-monitoring", "/admin/ai-prediction",
                "/admin/capa"]
 SETTLE_MS = 2500
 
@@ -34,7 +34,7 @@ OVERFLOW_JS = """() => {
     let p = el.parentElement, clipped = false;
     while (p && p !== document.body) {
       const ox = getComputedStyle(p).overflowX;
-      if (ox === 'auto' || ox === 'scroll' || ox === 'hidden') { clipped = true; break; }
+      if (ox === 'auto' || ox === 'scroll' || ox === 'hidden' || ox === 'clip') { clipped = true; break; }
       p = p.parentElement;
     }
     if (!clipped && r.right > vw + 1) offenders.push(

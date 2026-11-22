@@ -13,6 +13,7 @@ from app.core.dependencies import get_current_customer, get_current_user
 from app.core.config import settings
 from app.core import rate_limit
 from app.intelligence.taxonomy import SEVERITIES
+from app.intelligence.origin import origin_for_new_submission
 from app.models.complaint import Complaint, ComplaintAttachment, ComplaintStatusHistory
 from app.models.product import Product, ProductionBatch
 from app.models.user import User
@@ -123,6 +124,7 @@ def submit_complaint(
 
     complaint = Complaint(
         record_type="customer_submitted",
+        data_origin=origin_for_new_submission(current_user.email),
         submitted_by_user_id=current_user.id,
         customer_name=profile.full_name if profile else None,
         customer_email=current_user.email,

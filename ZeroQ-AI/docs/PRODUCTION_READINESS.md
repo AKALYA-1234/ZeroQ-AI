@@ -1,5 +1,8 @@
 # ZeroQ AI — Production Readiness Report (2026-11-22)
 
+> **Update:** the pilot-preparation phase verified PostgreSQL, Redis, multi-worker operation and live LLM
+> providers (Groq and OpenRouter). The current score and remaining risks are in [PILOT_READINESS.md](PILOT_READINESS.md).
+
 **Verdict: ready for a controlled pilot on real complaints; not yet general production.**
 Readiness score **7 / 10**. All Critical and High findings that could be fixed in code are fixed and covered by
 regression tests. What remains needs infrastructure or secrets that were not available here (LLM key, Redis,

@@ -216,7 +216,100 @@ def test_jwt_rejects_tampered_none_alg_and_expired_tokens(env):
     assert decode_token(f"{header}.{payload}.{sig[:-2]}xx") is None              # tampered signature
     none_header = base64.urlsafe_b64encode(_json.dumps({"alg": "none", "typ": "JWT"}).encode()).rstrip(b"=").decode()
     assert decode_token(f"{none_header}.{payload}.") is None                     # alg=none
-    expired = create_access_token({"sub": "1"}, expires_delta=timedelta(seconds=-5))
+    expired = create_access_token({"sub": "1"}, expires_delta=timedelta(seconds=-120))   # beyond clock-skew leeway
     assert decode_token(expired) is None
     assert env["client"].get("/api/admin/intelligence/config",
                              headers={"Authorization": f"Bearer {none_header}.{payload}."}).status_code == 401
+
+
+def test_migrations_widen_varchar_on_postgres_only(tmp_path):
+    """Regression: fallback_reason overflowed VARCHAR(255) on PostgreSQL. The widening migration is
+    a no-op on SQLite and converts VARCHAR → TEXT on PostgreSQL (run with TEST_DATABASE_URL)."""
+    import os
+    from sqlalchemy import create_engine, inspect, text
+    from app.database.migrations import apply_additive_migrations
+    url = os.environ.get("TEST_DATABASE_URL") or f"sqlite:///{tmp_path / 'w.db'}"
+    eng = create_engine(url)
+    with eng.begin() as c:
+        c.execute(text("DROP TABLE IF EXISTS issue_analyses_probe"))
+    if eng.dialect.name != "postgresql":
+        assert apply_additive_migrations(eng) == []
+        return
+    from app.database import migrations
+    with eng.begin() as c:
+        c.execute(text("CREATE TABLE issue_analyses_probe (id int, fallback_reason varchar(255))"))
+    old = migrations.WIDEN_TO_TEXT
+    migrations.WIDEN_TO_TEXT = [("issue_analyses_probe", "fallback_reason")]
+    try:
+        assert "issue_analyses_probe.fallback_reason -> TEXT" in apply_additive_migrations(eng)
+        col = next(c for c in inspect(eng).get_columns("issue_analyses_probe") if c["name"] == "fallback_reason")
+        assert getattr(col["type"], "length", None) is None
+        assert apply_additive_migrations(eng) == []      # idempotent
+    finally:
+        migrations.WIDEN_TO_TEXT = old
+        with eng.begin() as c:
+            c.execute(text("DROP TABLE IF EXISTS issue_analyses_probe"))
+        eng.dispose()
+
+
+def test_empty_environment_values_are_treated_as_unset(monkeypatch):
+    """Regression: compose passes unset optional values as "" which crashed numeric settings."""
+    monkeypatch.setenv("IMPACT_UNIT_COST_INR", "")
+    monkeypatch.setenv("OPENROUTER_MODEL", "")
+    monkeypatch.setenv("GROQ_API_KEY", "")
+    s = Settings(_env_file=None)
+    assert s.IMPACT_UNIT_COST_INR is None and s.OPENROUTER_MODEL is None and s.GROQ_API_KEY is None
+    monkeypatch.setenv("IMPACT_UNIT_COST_INR", "12.5")
+    assert Settings(_env_file=None).IMPACT_UNIT_COST_INR == 12.5
+
+
+# ── pilot account provisioning ─────────────────────────────────────────────
+
+def test_account_provisioning_rules(env):
+    from app.core import accounts
+    from app.models.user import User
+    db = env["Session"]()
+    try:
+        assert "created admin" in accounts.create_admin(db, "Ops@Pilot.example", "StrongPass2026x", "Ops Lead")
+        with pytest.raises(accounts.AccountError):
+            accounts.create_admin(db, "ops@pilot.example", "StrongPass2026x")            # duplicate (case-insensitive)
+        with pytest.raises(accounts.AccountError):
+            accounts.create_admin(db, "weak@pilot.example", "short1")                     # policy
+        with pytest.raises(accounts.AccountError):
+            accounts.create_admin(db, "x@pilot.example", "StrongPass2026x", role="customer")
+        # new admin can log in
+        ok = env["client"].post("/api/auth/login", json={"email": "ops@pilot.example", "password": "StrongPass2026x"})
+        assert ok.status_code == 200 and ok.json()["role"] == "admin"
+        # deactivate: login refused, record kept, never the last admin
+        assert "records kept" in accounts.deactivate(db, "ops@pilot.example")
+        assert env["client"].post("/api/auth/login", json={"email": "ops@pilot.example",
+                                                           "password": "StrongPass2026x"}).status_code == 400
+        assert db.query(User).filter(User.email == "ops@pilot.example").count() == 1
+        with pytest.raises(accounts.AccountError, match="last active admin"):
+            accounts.deactivate(db, "admin@test.local")
+        # set-password takes effect: the new password is accepted (account is inactive → 400, not 401),
+        # the old one is rejected (401)
+        accounts.set_password(db, "ops@pilot.example", "BrandNewPass2026x")
+        login = lambda pw: env["client"].post("/api/auth/login", json={"email": "ops@pilot.example", "password": pw})
+        assert login("BrandNewPass2026x").status_code == 400
+        assert login("StrongPass2026x").status_code == 401
+    finally:
+        db.close()
+
+
+def test_jwt_tolerates_small_clock_skew_between_hosts():
+    """Regression: a token issued by a host whose clock is a few seconds ahead was rejected
+    ("not yet valid (iat)") — intermittent 401s after a VM clock step / across workers on several hosts."""
+    import time
+    import jwt as pyjwt
+    from app.core.config import settings as s
+    from app.core.security import decode_token, CLOCK_SKEW_LEEWAY_SECONDS
+    now = int(time.time())
+    ahead = pyjwt.encode({"sub": "1", "exp": now + 600, "iat": now + 10}, s.SECRET_KEY, algorithm=s.ALGORITHM)
+    assert decode_token(ahead)["sub"] == "1"
+    far = pyjwt.encode({"sub": "1", "exp": now + 600, "iat": now + CLOCK_SKEW_LEEWAY_SECONDS + 60},
+                       s.SECRET_KEY, algorithm=s.ALGORITHM)
+    assert decode_token(far) is None                                   # beyond tolerance: still rejected
+    expired = pyjwt.encode({"sub": "1", "exp": now - CLOCK_SKEW_LEEWAY_SECONDS - 5, "iat": now - 600},
+                           s.SECRET_KEY, algorithm=s.ALGORITHM)
+    assert decode_token(expired) is None

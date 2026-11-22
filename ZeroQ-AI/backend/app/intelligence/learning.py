@@ -14,7 +14,7 @@ import numpy as np
 from datetime import datetime
 from typing import List, Optional, Tuple
 
-from sqlalchemy import text as sql_text
+from sqlalchemy import or_, text as sql_text
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -30,6 +30,7 @@ from app.intelligence.taxonomy import (
     OPERATIONAL_CATEGORY, NEW_ISSUE_CATEGORY, SUBCATEGORY_TO_CATEGORY, category_for,
 )
 from app.intelligence.understanding import understand
+from app.models.complaint import Complaint
 from app.models.intelligence import IncidentResolution, ModelTrainingRun
 
 logger = logging.getLogger(__name__)
@@ -54,9 +55,9 @@ def _historical_rows(db: Session) -> List[Tuple[str, str]]:
     rows = db.execute(sql_text(
         "SELECT DISTINCT c.description, c.complaint_subcategory FROM complaints c "
         "JOIN investigations i ON i.complaint_id = c.id "
-        "WHERE i.is_root_cause_verified = 1 AND c.complaint_subcategory IS NOT NULL "
+        "WHERE i.is_root_cause_verified = :verified AND c.complaint_subcategory IS NOT NULL "
         "AND c.description IS NOT NULL"
-    )).fetchall()
+    ), {"verified": True}).fetchall()   # bound boolean: portable across SQLite and PostgreSQL
     return [(r[0], r[1]) for r in rows]
 
 
@@ -66,12 +67,21 @@ def _verified_label(r: IncidentResolution) -> str:
     return r.verified_category
 
 
+def trainable_resolutions(db: Session) -> List[IncidentResolution]:
+    """Admin-verified incidents eligible for training / real-world evaluation: everything except
+    test-account submissions (origin.py). Ordered by id."""
+    return (db.query(IncidentResolution)
+            .join(Complaint, Complaint.id == IncidentResolution.complaint_id)
+            .filter(or_(Complaint.data_origin.is_(None), Complaint.data_origin != "test"))
+            .order_by(IncidentResolution.id).all())
+
+
 def training_rows(db: Session, exclude_ids: Optional[set] = None) -> List[Tuple[str, str, str, float]]:
     """(text, label, source, weight) for every training example. Only verified sources:
     quality-team-verified historical investigations, curated seeds, admin-verified incidents."""
     rows = [(t, l, "historical_verified", 1.0) for t, l in _historical_rows(db)]
     rows += [(p, label, "seed", 1.0) for label, phrases in SEED_PHRASES.items() for p in phrases]
-    for r in db.query(IncidentResolution).all():
+    for r in trainable_resolutions(db):
         if exclude_ids and r.id in exclude_ids:
             continue
         text = r.english_text or r.original_text
@@ -210,12 +220,12 @@ def _evaluate_all(db: Session, model: IssueClassifier, holdout, historical: Opti
 
 def retrain(db: Session, trigger: str = "manual", force: bool = False, user: Optional[str] = None,
             model_dir: Optional[str] = None) -> ModelTrainingRun:
-    unused = db.query(IncidentResolution).filter(IncidentResolution.used_in_training_run.is_(None)).all()
+    unused = [r for r in trainable_resolutions(db) if r.used_in_training_run is None]
     if trigger != "bootstrap" and not force and len(unused) < settings.RETRAIN_MIN_NEW_SAMPLES:
         raise NotEnoughVerifiedData(
             f"{len(unused)} new verified incidents; {settings.RETRAIN_MIN_NEW_SAMPLES} required (or force).")
 
-    verified = db.query(IncidentResolution).order_by(IncidentResolution.id).all()
+    verified = trainable_resolutions(db)
     holdout = [r for r in verified if r.id % HOLDOUT_EVERY == 0]
     rows = training_rows(db, exclude_ids={r.id for r in holdout})
     sources = {"historical_verified": 0, "seed": 0, "admin_verified": 0}
@@ -302,7 +312,7 @@ def get_classifier(db: Session, model_dir: Optional[str] = None) -> IssueClassif
 
 def learning_status(db: Session, model_dir: Optional[str] = None) -> dict:
     model = clf_registry.load_active(model_dir)
-    verified = db.query(IncidentResolution).all()
+    verified = trainable_resolutions(db)
     unused = [r for r in verified if r.used_in_training_run is None]
     judged = [r for r in verified if r.category_correct is not None]
     incorrect = [r for r in judged if not r.category_correct]

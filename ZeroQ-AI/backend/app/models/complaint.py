@@ -9,6 +9,9 @@ class Complaint(Base):
     id = Column(Integer, primary_key=True, index=True)
     complaint_id = Column(String(50), unique=True, index=True)
     record_type = Column(String(50), default="customer_submitted", nullable=False)
+    # Provenance for analytics/training. NULL = legacy row: synthetic if it carries a dataset
+    # customer_id, otherwise real. New submissions are "real" or "test" (see app/intelligence/origin.py).
+    data_origin = Column(String(20), nullable=True)
     
     customer_id = Column(String(50), index=True, nullable=True)
     submitted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)

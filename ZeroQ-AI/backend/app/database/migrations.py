@@ -2,8 +2,10 @@
 Additive, idempotent schema migrations for columns added after a table already exists
 (`create_all` creates missing tables but never alters existing ones).
 
-Only nullable ADD COLUMN operations live here — nothing is dropped, renamed or rewritten,
-so running it against production data is safe and repeatable.
+Only two kinds of operation live here, both non-destructive and repeatable:
+  * nullable ADD COLUMN
+  * widening a VARCHAR(n) column to TEXT (PostgreSQL; SQLite does not enforce lengths)
+Nothing is dropped, renamed, narrowed or rewritten.
 """
 import logging
 from typing import List, Tuple
@@ -16,6 +18,13 @@ logger = logging.getLogger(__name__)
 # (table, column, SQL type) — keep in sync with the SQLAlchemy models.
 ADDITIVE_COLUMNS: List[Tuple[str, str, str]] = [
     ("incident_resolutions", "units_at_risk", "INTEGER"),
+    ("complaints", "data_origin", "VARCHAR(20)"),
+]
+
+
+# (table, column) VARCHAR columns that must become TEXT.
+WIDEN_TO_TEXT: List[Tuple[str, str]] = [
+    ("issue_analyses", "fallback_reason"),
 ]
 
 
@@ -32,4 +41,13 @@ def apply_additive_migrations(engine: Engine) -> List[str]:
                 conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {sql_type}"))
                 applied.append(f"{table}.{column}")
                 logger.info("Applied migration: added %s.%s", table, column)
+        if engine.dialect.name == "postgresql":
+            for table, column in WIDEN_TO_TEXT:
+                if table not in tables:
+                    continue
+                col = next((c for c in inspector.get_columns(table) if c["name"] == column), None)
+                if col is not None and getattr(col["type"], "length", None):
+                    conn.execute(text(f"ALTER TABLE {table} ALTER COLUMN {column} TYPE TEXT"))
+                    applied.append(f"{table}.{column} -> TEXT")
+                    logger.info("Applied migration: widened %s.%s to TEXT", table, column)
     return applied

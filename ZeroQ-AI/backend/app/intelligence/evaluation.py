@@ -150,3 +150,15 @@ def fit_temperature(scores: np.ndarray, labels: np.ndarray) -> float:
         if nll < best_nll:
             best_t, best_nll = float(t), nll
     return round(best_t, 4)
+
+
+def wilson_interval(successes: int, n: int, z: float = 1.96) -> Optional[List[float]]:
+    """95% Wilson score interval for a proportion (returns [low, high] in %, or None if n == 0).
+    Far better behaved than the normal approximation at small n or extreme rates."""
+    if n <= 0:
+        return None
+    p = successes / n
+    denom = 1 + z * z / n
+    centre = (p + z * z / (2 * n)) / denom
+    half = z * ((p * (1 - p) / n + z * z / (4 * n * n)) ** 0.5) / denom
+    return [round(100 * max(0.0, centre - half), 1), round(100 * min(1.0, centre + half), 1)]

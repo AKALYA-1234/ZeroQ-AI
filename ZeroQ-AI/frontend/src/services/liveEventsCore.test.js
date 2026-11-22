@@ -54,3 +54,15 @@ describe('isStale', () => {
     expect(isStale(null, { version: 'x' })).toBe(false)
   })
 })
+
+describe('isConnectionStale', async () => {
+  const { isConnectionStale } = await import('./liveEventsCore.js')
+  it('is fresh before any ping and once a pong answers it', () => {
+    expect(isConnectionStale(0, 0, 50000)).toBe(false)
+    expect(isConnectionStale(1000, 1500, 50000)).toBe(false)
+  })
+  it('is stale only after the timeout without a pong', () => {
+    expect(isConnectionStale(1000, 0, 10999, 10000)).toBe(false)
+    expect(isConnectionStale(1000, 0, 11001, 10000)).toBe(true)
+  })
+})

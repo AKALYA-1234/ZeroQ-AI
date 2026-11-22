@@ -1,0 +1,90 @@
+# Pilot stack: PostgreSQL + Redis + backend (multi-worker) + nginx/SPA.
+#
+#   cp deploy/.env.pilot.example deploy/.env.pilot     # then fill in the values (never commit it)
+#   docker compose -f deploy/docker-compose.pilot.yml --env-file deploy/.env.pilot up -d --build
+#
+# Build contexts are relative to this file. Only nginx is published; Postgres and Redis stay on the
+# internal network. Put TLS in front of the published port.
+name: zeroq-pilot
+
+x-backend: &backend
+  image: zeroq-backend:pilot
+  build:
+    context: ../..                        # repository root (needs the sibling Model/ folder)
+    dockerfile: ZeroQ-AI/deploy/Dockerfile.backend
+  environment:
+    ENVIRONMENT: production
+    SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY (>= 32 random chars)}
+    DATABASE_URL: postgresql://${POSTGRES_USER:-zeroq}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-zeroq_pilot}
+    REDIS_URL: redis://redis:6379/0
+    BACKEND_WORKERS: ${BACKEND_WORKERS:-2}
+    LLM_ENABLED: ${LLM_ENABLED:-true}
+    LLM_PROVIDER: ${LLM_PROVIDER:-groq}
+    LLM_FALLBACK_PROVIDERS: ${LLM_FALLBACK_PROVIDERS:-openrouter,anthropic}
+    GROQ_API_KEY: ${GROQ_API_KEY:-}
+    GROQ_MODEL: ${GROQ_MODEL:-openai/gpt-oss-120b}
+    OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+    OPENROUTER_MODEL: ${OPENROUTER_MODEL:-}
+    ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    PILOT_TEST_EMAILS: ${PILOT_TEST_EMAILS:-}
+    IMPACT_UNIT_COST_INR: ${IMPACT_UNIT_COST_INR:-}
+    IMPACT_DOWNTIME_COST_PER_HOUR_INR: ${IMPACT_DOWNTIME_COST_PER_HOUR_INR:-}
+  volumes:
+    - uploads:/data/uploads
+    - classifier:/srv/repo/ZeroQ-AI/models/trained/issue_classifier
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-zeroq_pilot}
+      POSTGRES_USER: ${POSTGRES_USER:-zeroq}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env.pilot}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "128mb", "--maxmemory-policy", "volatile-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  migrate:                                # one-shot: tables, additive columns, initial classifier
+    <<: *backend
+    command: ["python", "../scripts/migrate_issue_intelligence.py"]
+    restart: "no"
+    depends_on:
+      db: {condition: service_healthy}
+
+  backend:
+    <<: *backend
+    restart: unless-stopped
+    depends_on:
+      db: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+
+  frontend:
+    build:
+      context: ..                         # ZeroQ-AI/
+      dockerfile: deploy/Dockerfile.frontend
+    restart: unless-stopped
+    depends_on:
+      backend: {condition: service_healthy}   # nginx starts only once the API answers
+    ports:
+      - "${PUBLIC_PORT:-8080}:80"
+
+volumes:
+  pgdata:
+  uploads:
+  classifier:

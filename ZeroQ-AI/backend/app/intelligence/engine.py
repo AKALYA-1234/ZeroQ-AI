@@ -30,6 +30,7 @@ from app.models.intelligence import IssueAnalysis
 logger = logging.getLogger(__name__)
 
 RULES_MAX_CONFIDENCE = 0.5
+SUBCATEGORY_MAX = 120   # issue_analyses.predicted_subcategory length
 CRITICAL_TERMS = r"(sick|ill\b|illness|vomit|hospital|injur|chok|allerg|diarrh|food poison)"
 HIGH_TERMS = r"(glass|metal|blade|sharp|child|baby|infant|mou?ld|contaminat)"
 SAFETY_CATEGORIES = {"Foreign Matter / Contamination", "Infestation"}
@@ -101,7 +102,10 @@ def _rules_prediction(symptoms: List[dict]) -> Optional[dict]:
 def run_analysis(db: Session, complaint: Complaint, allow_llm: bool = True) -> IssueAnalysis:
     text = compose_text(complaint)
     llm_usage: list = []
-    u = understand(text, allow_llm=allow_llm, usage_log=llm_usage)
+    # This complaint's own customer identifiers are redacted before any external LLM call.
+    pii_terms = tuple(t for t in (complaint.customer_name, complaint.customer_email,
+                                  complaint.customer_contact, complaint.customer_organization) if t)
+    u = understand(text, allow_llm=allow_llm, usage_log=llm_usage, pii_terms=pii_terms)
     english = u["english_text"]
     symptoms = u["symptoms"]
 
@@ -132,14 +136,21 @@ def run_analysis(db: Session, complaint: Complaint, allow_llm: bool = True) -> I
                 llm_out = llm.analyze_issue(
                     u["original_text"], english, u["language"]["name"],
                     [s["symptom"] for s in symptoms], search["incidents"],
-                    complaint.product.name if complaint.product else None, usage_log=llm_usage)
+                    complaint.product.name if complaint.product else None, usage_log=llm_usage,
+                    pii_terms=pii_terms)
             except llm.LLMUnavailable as exc:
                 reasons.append(f"LLM unavailable: {exc}")
         if llm_out is not None:
-            source, category, subcategory = "llm", llm_out.category, llm_out.subcategory
+            # LLM free text is clipped to the column size (PostgreSQL enforces VARCHAR limits).
+            source, category, subcategory = "llm", llm_out.category, (llm_out.subcategory or "")[:SUBCATEGORY_MAX] or None
             confidence, llm_result = llm_out.confidence, llm_out.model_dump()
+            served = next((u_ for u_ in reversed(llm_usage)
+                           if u_.get("operation") == "analyze" and u_.get("status") == "ok"), {})
+            llm_result.update(provider=served.get("provider"), model=served.get("model"))
             root_cause, recommendation = llm_out.probable_root_cause, llm_out.recommended_resolution
-            if u["translation_method"] != "llm" and llm_out.english_translation:
+            # Adopt the LLM's translation only when we had no real one (offline gloss / none available).
+            # Never for English input: the LLM saw a redacted copy and would echo [EMAIL]/[PHONE] tokens.
+            if u["translation_method"] in ("glossary", "unavailable") and llm_out.english_translation:
                 english = llm_out.english_translation
         else:
             rules = _rules_prediction(symptoms)

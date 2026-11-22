@@ -11,7 +11,7 @@ const TOOLTIP = { contentStyle: { fontSize: 12, borderRadius: 8, borderColor: '#
 
 function ChartPanel({ title, subtitle, empty, children, height = 240 }) {
   return (
-    <figure className="bg-white rounded-xl border border-gray-200 p-4 min-w-0">
+    <figure className="bg-white rounded-xl border border-gray-200 p-4 min-w-0 overflow-x-clip">
       <figcaption className="mb-3">
         <div className="text-sm font-bold text-gray-900">{title}</div>
         {subtitle && <div className="text-xs text-gray-500 mt-0.5">{subtitle}</div>}

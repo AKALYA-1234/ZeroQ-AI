@@ -6,6 +6,7 @@ import {
   IssueTrendChart, ResolutionTimeChart, CategoryChart, AIPerformanceChart, SatisfactionChart, WastageChart,
 } from '../../components/intelligence/ImpactCharts'
 import LearningPanel from '../../components/intelligence/LearningPanel'
+import { Stat, StatGroup } from '../../components/intelligence/ui'
 
 const PRESETS = [
   { id: '30d', label: '30 days', days: 30 },
@@ -15,38 +16,6 @@ const PRESETS = [
 ]
 const iso = d => d.toISOString().slice(0, 10)
 const num = (v, digits = 0) => (v == null ? null : Number(v).toLocaleString(undefined, { maximumFractionDigits: digits }))
-
-const BASIS_LABEL = {
-  admin_reported: 'Admin-reported', admin_estimate: 'Admin estimate', customer_reported: 'Customer-reported',
-  computed: 'Computed', estimate: 'Estimate (assumption-based)',
-}
-
-function Stat({ label, value, unit, note, tone, basis }) {
-  const empty = value == null
-  return (
-    <div className="px-4 py-3 min-w-0">
-      <dt className="text-xs text-gray-500 truncate" title={label}>{label}</dt>
-      <dd className={`mt-1 text-2xl font-bold tabular-nums ${empty ? 'text-gray-400' : 'text-gray-900'}`}>
-        {empty ? <span title="Not available — no supporting data">N/A</span> : value}
-        {!empty && unit && <span className="text-sm font-semibold text-gray-500 ml-0.5">{unit}</span>}
-      </dd>
-      {basis && <dd className="text-[10px] uppercase tracking-wide text-gray-400 mt-0.5">{BASIS_LABEL[basis] || basis}</dd>}
-      {note && <dd className={`text-[11px] mt-0.5 ${tone === 'good' ? 'text-emerald-700' : tone === 'bad' ? 'text-red-700' : 'text-gray-500'}`}>{note}</dd>}
-    </div>
-  )
-}
-
-function StatGroup({ title, caption, children }) {
-  return (
-    <section className="bg-white rounded-xl border border-gray-200" aria-label={title}>
-      <header className="px-4 pt-3">
-        <h3 className="text-[11px] font-bold uppercase tracking-wider text-teal-700">{title}</h3>
-        {caption && <p className="text-[11px] text-gray-500">{caption}</p>}
-      </header>
-      <dl className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 divide-gray-100 [&>*]:border-gray-100 [&>*]:border-t md:[&>*]:border-l">{children}</dl>
-    </section>
-  )
-}
 
 function changeNote(pct, lowerIsBetter, suffix = 'vs prior period') {
   if (pct == null) return { note: 'No prior-period data' }
@@ -138,7 +107,8 @@ export default function AIImpactAnalytics() {
         )}
         <label className="text-xs text-gray-600 sm:ml-auto">Data
           <select value={scope} onChange={e => setScope(e.target.value)} className="block mt-0.5 border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white">
-            <option value="live">Live platform data</option>
+            <option value="live">Real customers (live)</option>
+            <option value="test">Test accounts</option>
             <option value="imported">Imported historical dataset</option>
             <option value="all">Both</option>
           </select>
@@ -153,7 +123,8 @@ export default function AIImpactAnalytics() {
 
       {scope !== 'live' && (
         <p role="note" className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-          Includes the imported historical dataset (synthetic records loaded at setup). These figures are not live production results.
+          {scope === 'test' ? 'Showing submissions from designated test accounts. These are not real-customer results.'
+            : 'Includes the imported historical dataset (synthetic records loaded at setup). These figures are not live production results.'}
         </p>
       )}
       {error && <p role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">{error}</p>}

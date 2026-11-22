@@ -86,3 +86,36 @@ export function Field({ label, children }) {
 export function pct(v) {
   return v == null ? '—' : `${Math.round(v * 100)}%`
 }
+
+const BASIS_LABEL = {
+  admin_reported: 'Admin-reported', admin_estimate: 'Admin estimate', customer_reported: 'Customer-reported',
+  computed: 'Computed', estimate: 'Estimate (assumption-based)',
+}
+
+export function Stat({ label, value, unit, note, tone, basis }) {
+  const empty = value == null
+  return (
+    <div className="px-4 py-3 min-w-0">
+      <dt className="text-xs text-gray-500 truncate" title={label}>{label}</dt>
+      <dd className={`mt-1 text-2xl font-bold tabular-nums ${empty ? 'text-gray-400' : 'text-gray-900'}`}>
+        {empty ? <span title="Not available — no supporting data">N/A</span> : value}
+        {!empty && unit && <span className="text-sm font-semibold text-gray-500 ml-0.5">{unit}</span>}
+      </dd>
+      {basis && <dd className="text-[10px] uppercase tracking-wide text-gray-400 mt-0.5">{BASIS_LABEL[basis] || basis}</dd>}
+      {note && <dd className={`text-[11px] mt-0.5 ${tone === 'good' ? 'text-emerald-700' : tone === 'bad' ? 'text-red-700' : 'text-gray-500'}`}>{note}</dd>}
+    </div>
+  )
+}
+
+export function StatGroup({ title, caption, children }) {
+  return (
+    <section className="bg-white rounded-xl border border-gray-200" aria-label={title}>
+      <header className="px-4 pt-3">
+        <h3 className="text-[11px] font-bold uppercase tracking-wider text-teal-700">{title}</h3>
+        {caption && <p className="text-[11px] text-gray-500">{caption}</p>}
+      </header>
+      <dl className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 divide-gray-100 [&>*]:border-gray-100 [&>*]:border-t md:[&>*]:border-l">{children}</dl>
+    </section>
+  )
+}
+

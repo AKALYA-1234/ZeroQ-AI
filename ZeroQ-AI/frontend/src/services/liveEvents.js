@@ -5,14 +5,18 @@
 // - Emits a synthetic "connection.resync" event after a reconnect so views re-fetch
 //   anything they may have missed while offline (the API is the source of truth).
 
-import { reconnectDelay, createDeduper, UNAUTHORIZED_CLOSE } from './liveEventsCore'
+import { reconnectDelay, createDeduper, isConnectionStale, UNAUTHORIZED_CLOSE } from './liveEventsCore'
 
-const HEARTBEAT_MS = 25000
+const HEARTBEAT_MS = 15000
+const WATCHDOG_MS = 5000
 
 let socket = null
 let attempts = 0
 let reconnectTimer = null
 let heartbeatTimer = null
+let watchdogTimer = null
+let lastPingAt = 0
+let lastPongAt = 0
 let hasConnectedBefore = false
 let status = 'idle'
 const handlers = new Set()
@@ -42,15 +46,30 @@ function scheduleReconnect() {
   reconnectTimer = setTimeout(() => { reconnectTimer = null; connect() }, delay)
 }
 
+// Single teardown path for a socket (normal close, dead connection, or browser offline).
+function dropSocket(ws, { code, retry = true } = {}) {
+  if (ws.__dropped) return
+  ws.__dropped = true
+  clearInterval(heartbeatTimer)
+  clearInterval(watchdogTimer)
+  if (socket === ws) socket = null
+  try { ws.close() } catch { /* already closing */ }
+  // Rejected or expired token: stop retrying; the next API call will route to login.
+  if (code === UNAUTHORIZED_CLOSE) { setStatus('unauthorized'); return }
+  setStatus('offline')
+  if (retry) scheduleReconnect()
+}
+
 function connect() {
   const token = localStorage.getItem('zeroq_token')
   if (!token || socket) return
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) { setStatus('offline'); return }
   setStatus('connecting')
   const ws = new WebSocket(socketUrl())
   socket = ws
   ws.onopen = () => ws.send(JSON.stringify({ type: 'auth', token }))
   ws.onmessage = (msg) => {
-    if (msg.data === 'pong') return
+    if (msg.data === 'pong') { lastPongAt = Date.now(); return }
     let event
     try { event = JSON.parse(msg.data) } catch { return }
     if (event.type === 'connected') {
@@ -59,21 +78,35 @@ function connect() {
       if (hasConnectedBefore) emit({ type: 'connection.resync' })
       hasConnectedBefore = true
       clearInterval(heartbeatTimer)
-      heartbeatTimer = setInterval(() => ws.readyState === 1 && ws.send('ping'), HEARTBEAT_MS)
+      clearInterval(watchdogTimer)
+      lastPingAt = 0
+      lastPongAt = 0
+      heartbeatTimer = setInterval(() => {
+        if (ws.readyState === 1) { lastPingAt = Date.now(); ws.send('ping') }
+      }, HEARTBEAT_MS)
+      // A socket can look open while nothing flows (proxy, sleeping laptop, lost network).
+      watchdogTimer = setInterval(() => {
+        if (isConnectionStale(lastPingAt, lastPongAt, Date.now())) dropSocket(ws)
+      }, WATCHDOG_MS)
       return
     }
     if (deduper.seen(event.event_id)) return
     emit(event)
   }
-  ws.onclose = (ev) => {
-    clearInterval(heartbeatTimer)
-    socket = null
-    // Rejected or expired token: stop retrying; the next API call will route to login.
-    if (ev.code === UNAUTHORIZED_CLOSE) { setStatus('unauthorized'); return }
-    setStatus('offline')
-    scheduleReconnect()
-  }
-  ws.onerror = () => ws.close()
+  ws.onclose = (ev) => dropSocket(ws, { code: ev.code })
+  ws.onerror = () => dropSocket(ws)
+}
+
+// The browser knows about lost connectivity before TCP does: react immediately.
+if (typeof window !== 'undefined') {
+  window.addEventListener('offline', () => { if (socket) dropSocket(socket, { retry: false }); else setStatus('offline') })
+  window.addEventListener('online', () => {
+    if (handlers.size === 0) return
+    clearTimeout(reconnectTimer)
+    reconnectTimer = null
+    attempts = 0
+    connect()
+  })
 }
 
 export function subscribe(handler) {
@@ -82,6 +115,9 @@ export function subscribe(handler) {
   return () => {
     handlers.delete(handler)
     if (handlers.size === 0 && socket) {
+      socket.__dropped = true
+      clearInterval(heartbeatTimer)
+      clearInterval(watchdogTimer)
       socket.close(1000)
       socket = null
       hasConnectedBefore = false
@@ -100,7 +136,9 @@ export function disconnect() {
   handlers.clear()
   clearTimeout(reconnectTimer)
   reconnectTimer = null
-  if (socket) socket.close(1000)
+  clearInterval(heartbeatTimer)
+  clearInterval(watchdogTimer)
+  if (socket) { socket.__dropped = true; socket.close(1000) }
   socket = null
   hasConnectedBefore = false
   setStatus('idle')

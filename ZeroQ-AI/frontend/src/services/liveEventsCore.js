@@ -35,3 +35,13 @@ export const UNAUTHORIZED_CLOSE = 4401
 export function isStale(current, incoming) {
   return Boolean(current && incoming && current.version && incoming.version && current.version > incoming.version)
 }
+
+// Heartbeat watchdog: after a ping, a pong must arrive within this window or the socket is
+// considered dead (proxies and offline networks can leave a socket "open" with nothing flowing).
+export const PONG_TIMEOUT_MS = 10000
+
+export function isConnectionStale(lastPingAt, lastPongAt, now, timeoutMs = PONG_TIMEOUT_MS) {
+  if (!lastPingAt) return false                 // nothing sent yet
+  if (lastPongAt >= lastPingAt) return false    // answered
+  return now - lastPingAt > timeoutMs
+}

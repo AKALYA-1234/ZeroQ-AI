@@ -1,0 +1,40 @@
+# Backend image. Build context = the REPOSITORY ROOT (the XGBoost service reads the sibling ./Model folder):
+#   docker build -f ZeroQ-AI/deploy/Dockerfile.backend -t zeroq-backend .
+FROM python:3.13-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
+WORKDIR /srv/repo/ZeroQ-AI
+
+# Exact, audited dependency set (includes psycopg2-binary, redis, anthropic). On Linux the `xgboost`
+# wheel pulls NVIDIA NCCL (~340 MB) for GPU training; inference here is CPU-only, so the identical-
+# version `xgboost-cpu` build is installed instead.
+COPY ZeroQ-AI/backend/requirements.lock.txt backend/requirements.lock.txt
+RUN grep -v '^xgboost==' backend/requirements.lock.txt > /tmp/requirements.txt  && XGB=$(grep '^xgboost==' backend/requirements.lock.txt | cut -d= -f3)  && pip install -r /tmp/requirements.txt "xgboost-cpu==${XGB}"  && rm /tmp/requirements.txt
+
+COPY ZeroQ-AI/backend backend
+COPY ZeroQ-AI/scripts scripts
+COPY ZeroQ-AI/models models
+# Only the XGBoost artifacts the service loads (see app/ml/model_service.py) — not raw data or notebooks.
+COPY Model/model_ready_data/preprocessor.joblib /srv/repo/Model/model_ready_data/preprocessor.joblib
+COPY Model/model_ready_data/transformed_feature_names.csv /srv/repo/Model/model_ready_data/transformed_feature_names.csv
+COPY Model/model_ready_data/train_raw.csv /srv/repo/Model/model_ready_data/train_raw.csv
+COPY Model/model_training/final_xgboost /srv/repo/Model/model_training/final_xgboost
+COPY Model/feature_engineered_data/batch_features_pre_dispatch.csv /srv/repo/Model/feature_engineered_data/batch_features_pre_dispatch.csv
+
+# Fail the build if the trained XGBoost model or its preprocessor cannot be loaded.
+RUN cd backend && python -c "from app.ml.model_service import is_model_available, get_model_error; import sys; ok = is_model_available(); print('xgboost model loaded:', ok, get_model_error() or ''); sys.exit(0 if ok else 1)"
+
+# Non-root. Uploads and the versioned issue-classifier registry live on mounted volumes.
+RUN useradd --system --uid 10001 zeroq \
+ && mkdir -p /data/uploads /srv/repo/ZeroQ-AI/models/trained/issue_classifier \
+ && chown -R zeroq /data /srv/repo/ZeroQ-AI/models
+USER zeroq
+ENV UPLOAD_DIR=/data/uploads ENVIRONMENT=production
+WORKDIR /srv/repo/ZeroQ-AI/backend
+EXPOSE 8000
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=5 \
+  CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=4).status==200 else 1)"
+
+# BACKEND_WORKERS > 1 requires REDIS_URL (shared events + rate limits).
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${BACKEND_WORKERS:-2} --proxy-headers --forwarded-allow-ips='*'"]

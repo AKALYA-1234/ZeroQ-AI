@@ -103,8 +103,11 @@ def main():
         page.goto(f"{args.base}/customer/track-complaint/{cid2}")
         page.get_by_text("Live — updates appear automatically").wait_for(timeout=TIMEOUT_MS)
         page.get_by_text("Tanglish (Tamil-English)").wait_for(timeout=TIMEOUT_MS)
+        t_off = time.monotonic()
         ctx.set_offline(True)
         page.get_by_text("Reconnecting for live updates").wait_for(timeout=TIMEOUT_MS)
+        record("offline shown to customer promptly", time.monotonic() - t_off < 5,
+               seconds_to_show_offline=round(time.monotonic() - t_off, 2))
         resolve(client, admin["access_token"], cid2, "Resolved while you were offline.")
         time.sleep(OFFLINE_SECONDS)
         ctx.set_offline(False)

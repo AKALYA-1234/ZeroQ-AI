@@ -6,6 +6,7 @@ import { useLiveEvents, useLiveStatus } from '../../hooks/useLiveEvents'
 import { isStale } from '../../services/liveEventsCore'
 import { AIUnderstandingCard, ResolutionCard, FeedbackCard, ResolutionTimeline } from '../../components/intelligence/CustomerResolution'
 
+const POLL_FALLBACK_MS = 30000
 const STATUS_STEPS = ['Submitted', 'Under Review', 'Investigating', 'Resolved']
 const STATUS_MAP = {
   submitted: 0,
@@ -48,6 +49,13 @@ export default function TrackComplaint() {
     const cid = (id || searchId).trim()
     if (cid) fetchComplaint(cid)
   }
+
+  // Safety net: if a live event was missed (e.g. the event bus was briefly down), re-sync while open.
+  React.useEffect(() => {
+    if (!complaint || complaint.status === 'resolved') return undefined
+    const timer = setInterval(() => fetchComplaint(complaint.complaint_id, { quiet: true }), POLL_FALLBACK_MS)
+    return () => clearInterval(timer)
+  }, [complaint?.complaint_id, complaint?.status])
 
   // Real-time: admin resolutions / status changes / AI analysis update this page without a refresh.
   useLiveEvents(ev => {
