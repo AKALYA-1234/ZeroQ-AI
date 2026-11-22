@@ -156,6 +156,8 @@ C:\Projects\ZeroQ-AI\
 
 ## 7. Quick Start Guide (Zero to Running)
 
+> **New here? Follow [docs/RUN_LOCALLY.md](ZeroQ-AI/docs/RUN_LOCALLY.md)** for tested step-by-step setup on Windows, macOS and Linux (no PostgreSQL or API key needed). The section below is the older summary.
+
 ### Prerequisites
 - Python 3.10+
 - Node.js v18+ & npm

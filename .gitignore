@@ -1,0 +1,5 @@
+# Local test artifacts — never commit
+manual_test.db
+manual_test.db-shm
+manual_test.db-wal
+.playwright-mcp/
